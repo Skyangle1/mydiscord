@@ -1,0 +1,27 @@
+{
+  "name": "confession-bot",
+  "version": "1.0.0",
+  "description": "A Discord confession/love letter bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.6.0",
+    "ascii-table": "^0.0.9",
+    "axios": "^1.6.0",
+    "discord-api-types": "^0.38.38",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "sqlite3": "^5.1.6"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "confession"
+  ],
+  "author": "",
+  "license": "ISC"
+}
