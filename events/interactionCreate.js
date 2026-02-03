@@ -115,26 +115,26 @@ module.exports = async (client, interaction) => {
                         .setCustomId('modal_cari_jodoh')
                         .setTitle('Form Cari Jodoh');
 
-                    // Input for Name / Nickname
+                    // Input for Name
                     const nameInput = new TextInputBuilder()
                         .setCustomId('j_nama')
-                        .setLabel('Nama / Panggilan')
+                        .setLabel('Nama')
                         .setStyle(TextInputStyle.Short)
                         .setRequired(true)
                         .setMaxLength(30);
 
-                    // Input for Age & Location
+                    // Input for Age
                     const ageLocationInput = new TextInputBuilder()
                         .setCustomId('j_umur')
-                        .setLabel('Umur & Domisili')
+                        .setLabel('Umur')
                         .setStyle(TextInputStyle.Short)
                         .setRequired(true)
                         .setPlaceholder('Contoh: 20, Jakarta atau Rahasia, Bandung');
 
-                    // Input for Gender & Status
+                    // Input for Gender
                     const genderStatusInput = new TextInputBuilder()
                         .setCustomId('j_gender')
-                        .setLabel('Gender / Status')
+                        .setLabel('Gender')
                         .setStyle(TextInputStyle.Short)
                         .setRequired(true)
                         .setPlaceholder('Contoh: Pria, Single atau Wanita, Mencari');
@@ -336,11 +336,21 @@ module.exports = async (client, interaction) => {
                 await interaction.deferReply({ ephemeral: true });
 
                 try {
+                    // Debug logging for letter submission
+                    console.log('--- LETTER SUBMISSION DEBUG ---');
+                    console.log('Processing modal submission:', interaction.customId);
+
                     // Get values from modal
                     const inputFromValue = interaction.fields.getTextInputValue('input_from');
                     const inputToValue = interaction.fields.getTextInputValue('input_to');
                     const inputContentValue = interaction.fields.getTextInputValue('input_content');
                     const inputImageValue = interaction.fields.getTextInputValue('input_image');
+
+                    console.log('Input values retrieved:');
+                    console.log('- From:', inputFromValue);
+                    console.log('- To:', inputToValue);
+                    console.log('- Content length:', inputContentValue?.length || 0);
+                    console.log('- Image:', inputImageValue);
 
                     // Clean the input to remove @ symbol if present
                     let cleanInput = inputToValue;
@@ -356,81 +366,81 @@ module.exports = async (client, interaction) => {
                     if (mentionMatch) {
                         mentionedUserId = mentionMatch[1];
                         // Try to find the user by ID first
-                        targetUser = await client.users.fetch(mentionedUserId).catch(() => null);
+                        var targetUser = await client.users.fetch(mentionedUserId).catch(() => null);
                         if (targetUser) {
-                            foundBy = 'user mention';
+                            var foundBy = 'user mention';
                         }
                     }
 
                     // Try to find the user by username with flexible validation
-                    let targetUser = null;
-                    let foundBy = ''; // Track how the user was found
+                    let targetUserLocal = targetUser || null;
+                    let foundByLocal = foundBy || ''; // Track how the user was found
 
                     try {
                         // If it's a mention, we already tried fetching by ID above
-                        if (!targetUser && mentionedUserId) {
+                        if (!targetUserLocal && mentionedUserId) {
                             // If fetching by ID failed, try to find in guild members
                             const guildMember = await interaction.guild.members.fetch(mentionedUserId).catch(() => null);
                             if (guildMember) {
-                                targetUser = guildMember.user;
-                                foundBy = 'user mention (from guild)';
+                                targetUserLocal = guildMember.user;
+                                foundByLocal = 'user mention (from guild)';
                             }
                         }
 
                         // If not a mention or user not found by ID, proceed with username search
-                        if (!targetUser) {
+                        if (!targetUserLocal) {
                             // First, try to find by exact username#discriminator (most precise)
                             if (cleanInput.includes('#')) {
-                                targetUser = client.users.cache.find(user =>
+                                targetUserLocal = client.users.cache.find(user =>
                                     `${user.username}#${user.discriminator}` === cleanInput
                                 );
-                                if (targetUser) foundBy = 'username#discriminator';
+                                if (targetUserLocal) foundByLocal = 'username#discriminator';
                             }
 
                             // If not found by discriminator, try exact username match (case-insensitive)
-                            if (!targetUser) {
-                                targetUser = client.users.cache.find(user =>
+                            if (!targetUserLocal) {
+                                targetUserLocal = client.users.cache.find(user =>
                                     user.username.toLowerCase() === cleanInput.toLowerCase()
                                 );
-                                if (targetUser) foundBy = 'username';
+                                if (targetUserLocal) foundByLocal = 'username';
                             }
 
                             // If still not found, try partial match (for usernames with punctuation, numbers, etc.)
-                            if (!targetUser) {
-                                targetUser = client.users.cache.find(user =>
+                            if (!targetUserLocal) {
+                                targetUserLocal = client.users.cache.find(user =>
                                     user.username.toLowerCase().includes(cleanInput.toLowerCase())
                                 );
-                                if (targetUser) foundBy = 'partial username match';
+                                if (targetUserLocal) foundByLocal = 'partial username match';
                             }
 
                             // If still not found, try to find by nickname in the current guild (exact match first)
-                            if (!targetUser) {
+                            if (!targetUserLocal) {
                                 const guild = interaction.guild;
                                 const member = guild.members.cache.find(m =>
                                     m.user.username.toLowerCase() === cleanInput.toLowerCase() ||
                                     (m.nickname && m.nickname.toLowerCase() === cleanInput.toLowerCase())
                                 );
                                 if (member) {
-                                    targetUser = member.user;
-                                    foundBy = m.nickname && m.nickname.toLowerCase() === cleanInput.toLowerCase() ? 'nickname' : 'username in guild';
+                                    targetUserLocal = member.user;
+                                    foundByLocal = m.nickname && m.nickname.toLowerCase() === cleanInput.toLowerCase() ? 'nickname' : 'username in guild';
                                 }
                             }
 
                             // If still not found, try partial nickname match in the current guild
-                            if (!targetUser) {
+                            if (!targetUserLocal) {
                                 const guild = interaction.guild;
                                 const member = guild.members.cache.find(m =>
                                     m.user.username.toLowerCase().includes(cleanInput.toLowerCase()) ||
                                     (m.nickname && m.nickname.toLowerCase().includes(cleanInput.toLowerCase()))
                                 );
                                 if (member) {
-                                    targetUser = member.user;
-                                    foundBy = m.nickname && m.nickname.toLowerCase().includes(cleanInput.toLowerCase()) ? 'partial nickname match' : 'partial username match in guild';
+                                    targetUserLocal = member.user;
+                                    foundByLocal = m.nickname && m.nickname.toLowerCase().includes(cleanInput.toLowerCase()) ? 'partial nickname match' : 'partial username match in guild';
                                 }
                             }
 
                             // If still not found in cache, try fetching all members from the current guild
-                            if (!targetUser) {
+                            if (!targetUserLocal) {
                                 try {
                                     // Search in the current guild for the user
                                     const guild = interaction.guild;
@@ -465,8 +475,8 @@ module.exports = async (client, interaction) => {
                                     }
 
                                     if (member) {
-                                        targetUser = member.user;
-                                        foundBy = member.nickname && member.nickname.toLowerCase().includes(cleanInput.toLowerCase()) ?
+                                        targetUserLocal = member.user;
+                                        foundByLocal = member.nickname && member.nickname.toLowerCase().includes(cleanInput.toLowerCase()) ?
                                             'partial nickname match (fetched)' : 'partial username match (fetched)';
                                     }
                                 } catch (fetchError) {
@@ -475,7 +485,7 @@ module.exports = async (client, interaction) => {
                             }
                         }
 
-                        if (!targetUser) {
+                        if (!targetUserLocal) {
                             await interaction.editReply({
                                 content: `Tidak dapat menemukan pengguna dengan username "${inputToValue}".\n\nCara pencarian yang didukung:\n• @mention langsung (lebih disarankan)\n• Username lengkap (cth: johndoe, john.doe, user_name)\n• Sebagian dari username atau nickname\n• Gunakan @mention untuk hasil terbaik`
                             });
@@ -483,14 +493,16 @@ module.exports = async (client, interaction) => {
                         }
 
                         // Additional check: ensure the target user is in the same guild as the interaction
-                        const guildMember = interaction.guild.members.cache.get(targetUser.id);
+                        const guildMember = interaction.guild.members.cache.get(targetUserLocal.id);
                         if (!guildMember) {
                             await interaction.editReply({
-                                content: `Pengguna "${inputToValue}" (${foundBy}) ditemukan, tetapi bukan merupakan anggota server ini. Anda hanya dapat mengirim surat ke anggota server ini.`
+                                content: `Pengguna "${inputToValue}" (${foundByLocal}) ditemukan, tetapi bukan merupakan anggota server ini. Anda hanya dapat mengirim surat ke anggota server ini.`
                             });
                             return;
                         }
 
+                        // Update the variables to be used later
+                        targetUser = targetUserLocal;
                     } catch (error) {
                         console.error('Error finding user:', error);
                         await interaction.editReply({
@@ -550,9 +562,35 @@ module.exports = async (client, interaction) => {
                         const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, replyButton);
 
                         // Send to confession setup channel
+                        console.log('Confession channel ID from env:', process.env.CONFESSION_SETUP_CHANNEL_ID);
                         const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
+                        console.log('Target channel object:', targetChannel ? 'FOUND' : 'NOT FOUND');
+
                         if (!targetChannel) {
+                            console.log('ERROR: Confession setup channel not found');
                             await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.' });
+                            return;
+                        }
+
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = targetChannel.permissionsFor(interaction.client.user);
+                        console.log('Bot permissions in target channel:', botPermissions?.toArray());
+
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission');
+                            await interaction.editReply({ content: 'Bot does not have permission to send messages in the confession channel.' });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission');
+                            await interaction.editReply({ content: 'Bot does not have permission to view the confession channel.' });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission');
+                            await interaction.editReply({ content: 'Bot does not have permission to embed links in the confession channel.' });
                             return;
                         }
 
@@ -580,10 +618,16 @@ module.exports = async (client, interaction) => {
                                     .setColor('#FF69B4')
                                     .setTimestamp();
 
-                                await targetUser.send({ embeds: [dmEmbed] });
+                                if (targetUser) {
+                                    await targetUser.send({ embeds: [dmEmbed] });
+                                }
                             } catch (dmError) {
                                 // If DM fails, it's likely because the user has DMs disabled
-                                console.warn(`Could not send DM to user ${targetUser.id}:`, dmError.message);
+                                if (targetUser) {
+                                    console.warn(`Could not send DM to user ${targetUser.id}:`, dmError.message);
+                                } else {
+                                    console.warn('Could not send DM to user: targetUser is undefined', dmError.message);
+                                }
                                 // Optionally notify the sender that DM failed
                                 // await interaction.followUp({
                                 //     content: `Catatan: Tidak dapat mengirim DM ke penerima karena mereka mungkin menonaktifkan pesan pribadi.`,
@@ -938,13 +982,30 @@ module.exports = async (client, interaction) => {
             }
         }
 
-        // Super Debug: Check the exact ID being received
+        // Handle Modal Submissions
         if (interaction.isModalSubmit()) {
             console.log('--- DEBUG MODAL ---');
             console.log('ID yang Diterima:', `"${interaction.customId}"`);
-            console.log('ID yang Dicari:', '"modal_cari_jodoh"');
-            console.log('Apakah Cocok?', interaction.customId === 'modal_cari_jodoh');
 
+            // Check which modal is being handled
+            if (interaction.customId === 'modal_cari_jodoh') {
+                console.log('ID yang Dicari:', '"modal_cari_jodoh"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_cari_jodoh');
+            } else if (interaction.customId === 'modal_saran_user') {
+                console.log('ID yang Dicari:', '"modal_saran_user"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user');
+            } else if (interaction.customId === 'modal_saran_user_from_msg') {
+                console.log('ID yang Dicari:', '"modal_saran_user_from_msg"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user_from_msg');
+            } else if (interaction.customId.startsWith('modal_chat_me_')) {
+                console.log('ID yang Dicari:', '"modal_chat_me_"');
+                console.log('Apakah Cocok?', interaction.customId.startsWith('modal_chat_me_'));
+            } else {
+                console.log('ID yang Dicari:', 'other modal types');
+                console.log('Apakah Cocok?', 'N/A - Custom handling');
+            }
+
+            // Handle Find Match modal submission
             if (interaction.customId === 'modal_cari_jodoh') {
                 console.log('BERHASIL MASUK KE BLOK MODAL!');
 
@@ -1150,7 +1211,7 @@ module.exports = async (client, interaction) => {
             }
             // Handle Feedback modal submission (for the feedback button)
             else if (interaction.customId === 'modal_saran_user') {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
 
                 const kategori = interaction.fields.getTextInputValue('kategori_saran');
                 const pesan = interaction.fields.getTextInputValue('pesan_saran');
@@ -1168,13 +1229,45 @@ module.exports = async (client, interaction) => {
                     )
                     .setTimestamp();
 
-                if (logChannel) await logChannel.send({ embeds: [logEmbed] });
+                // Check if log channel exists and bot has permissions
+                if (logChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
 
-                await interaction.editReply('Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨');
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
+                            // Still send success message to user but log the error
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            // Send without embed if no embed permission
+                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                        } else {
+                            await logChannel.send({ embeds: [logEmbed] });
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending feedback to log channel:', channelError);
+                        // Still send success message to user even if log channel fails
+                    }
+                } else {
+                    console.log('Feedback log channel not found or not configured');
+                }
+
+                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
             }
             // Handle Feedback modal submission (for the feedback button from message)
             else if (interaction.customId === 'modal_saran_user_from_msg') {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
 
                 const kategori = interaction.fields.getTextInputValue('kategori_saran_from_msg');
                 const pesan = interaction.fields.getTextInputValue('pesan_saran_from_msg');
@@ -1192,9 +1285,41 @@ module.exports = async (client, interaction) => {
                     )
                     .setTimestamp();
 
-                if (logChannel) await logChannel.send({ embeds: [logEmbed] });
+                // Check if log channel exists and bot has permissions
+                if (logChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
 
-                await interaction.editReply('Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨');
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
+                            // Still send success message to user but log the error
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            // Send without embed if no embed permission
+                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                        } else {
+                            await logChannel.send({ embeds: [logEmbed] });
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending feedback to log channel:', channelError);
+                        // Still send success message to user even if log channel fails
+                    }
+                } else {
+                    console.log('Feedback log channel not found or not configured');
+                }
+
+                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
             }
         }
         // Handle any other modal submissions that weren't caught by specific handlers
