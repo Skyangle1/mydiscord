@@ -172,7 +172,7 @@ module.exports = async (client, interaction) => {
                 }
             }
             // Handle reply button clicks
-            else if (interaction.customId.startsWith('btn_reply_')) {
+            else if (interaction.customId && interaction.customId.startsWith('btn_reply_')) {
                 const letterId = interaction.customId.split('_')[2];
 
                 // Show modal immediately to avoid DiscordAPIError[10062]
@@ -183,26 +183,27 @@ module.exports = async (client, interaction) => {
                 // Input for reply content (required)
                 const inputReply = new TextInputBuilder()
                     .setCustomId('input_reply_content')
-                    .setLabel('Balasan Anda')
+                    .setLabel('Isi Balasan')
                     .setStyle(TextInputStyle.Paragraph)
                     .setRequired(true);
 
-                // Input for anonymity choice (optional)
-                const inputAnon = new TextInputBuilder()
-                    .setCustomId('input_reply_anon')
-                    .setLabel('Balas anonim? (kosongkan utk tampilkan nama)')
+                // Input for sender name (optional)
+                const inputSenderName = new TextInputBuilder()
+                    .setCustomId('input_reply_sender_name')
+                    .setLabel('Nama Pengirim (Kosongkan untuk Nama Asli)')
                     .setStyle(TextInputStyle.Short)
-                    .setRequired(false);
+                    .setPlaceholder('Misal: Pengagum Rahasia / Velvet Member')
+                    .setRequired(false); // <-- Key is here (false)
 
                 const firstActionRow = new ActionRowBuilder().addComponents(inputReply);
-                const secondActionRow = new ActionRowBuilder().addComponents(inputAnon);
+                const secondActionRow = new ActionRowBuilder().addComponents(inputSenderName);
                 modal.addComponents(firstActionRow, secondActionRow);
 
                 // Show modal first, then handle database validation in the modal submit handler
                 await interaction.showModal(modal);
             }
             // Handle additional reply button clicks in threads
-            else if (interaction.customId.startsWith('btn_additional_reply_')) {
+            else if (interaction.customId && interaction.customId.startsWith('btn_additional_reply_')) {
                 const letterId = interaction.customId.split('_')[3];
 
                 // Show modal immediately to avoid DiscordAPIError[10062]
@@ -213,26 +214,27 @@ module.exports = async (client, interaction) => {
                 // Input for reply content (required)
                 const inputReply = new TextInputBuilder()
                     .setCustomId('input_reply_content')
-                    .setLabel('Balasan Anda')
+                    .setLabel('Isi Balasan')
                     .setStyle(TextInputStyle.Paragraph)
                     .setRequired(true);
 
-                // Input for anonymity choice (optional)
-                const inputAnon = new TextInputBuilder()
-                    .setCustomId('input_reply_anon')
-                    .setLabel('Balas anonim? (kosongkan utk tampilkan nama)')
+                // Input for sender name (optional)
+                const inputSenderName = new TextInputBuilder()
+                    .setCustomId('input_reply_sender_name')
+                    .setLabel('Nama Pengirim (Kosongkan untuk Nama Asli)')
                     .setStyle(TextInputStyle.Short)
-                    .setRequired(false);
+                    .setPlaceholder('Misal: Pengagum Rahasia / Velvet Member')
+                    .setRequired(false); // <-- Key is here (false)
 
                 const firstActionRow = new ActionRowBuilder().addComponents(inputReply);
-                const secondActionRow = new ActionRowBuilder().addComponents(inputAnon);
+                const secondActionRow = new ActionRowBuilder().addComponents(inputSenderName);
                 modal.addComponents(firstActionRow, secondActionRow);
 
                 // Show modal first, then handle database validation in the modal submit handler
                 await interaction.showModal(modal);
             }
             // Handle Chat Me button click
-            else if (interaction.customId.startsWith('btn_chat_me_')) {
+            else if (interaction.customId && interaction.customId.startsWith('btn_chat_me_')) {
                 const targetUserId = interaction.customId.split('_')[3]; // Extract user ID from custom ID
 
                 try {
@@ -266,7 +268,7 @@ module.exports = async (client, interaction) => {
                 try {
                     const modal = new ModalBuilder()
                         .setCustomId('modal_saran_user')
-                        .setTitle('🖋️ Kirim Saran Mɣralune');
+                        .setTitle('^\n\nKirim Saran Mɣralune');
 
                     const inputKategori = new TextInputBuilder()
                         .setCustomId('kategori_saran')
@@ -331,9 +333,848 @@ module.exports = async (client, interaction) => {
                     });
                 }
             }
-            // Handle modal submission for new letter
-            if (interaction.customId === 'modal_letter_submit') {
-                await interaction.deferReply({ ephemeral: true });
+            // Reply modal handlers have been moved to the correct modal submission section
+            // Handle modal submission for reply
+            else if (interaction.customId.startsWith('modal_reply_submit_')) {
+                await interaction.deferReply({ flags: 64 }); // Use deferReply for modal submissions
+
+                try {
+                    const letterId = interaction.customId.split('_')[3];
+                    const replyContent = interaction.fields.getTextInputValue('input_reply_content');
+                    const replySenderName = interaction.fields.getTextInputValue('input_reply_sender_name');
+
+                    // LOGIKA: Pakai nama custom, kalau kosong pakai Tag Discord asli
+                    const replyDisplayName = replySenderName && replySenderName.trim() !== ""
+                        ? replySenderName
+                        : interaction.user.tag;
+
+                    // Get the original letter info
+                    const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
+                    db.get(query, [parseInt(letterId)], async (err, row) => {
+                        if (err) {
+                            console.error('Database error:', err);
+                            await interaction.editReply({ content: 'Database error occurred!', flags: 64 });
+                            return;
+                        }
+
+                        if (!row) {
+                            await interaction.editReply({ content: 'Original letter not found!', flags: 64 });
+                            return;
+                        }
+
+                        // Find the original message in the confession setup channel
+                        const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
+                        if (!targetChannel) {
+                            await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', flags: 64 });
+                            return;
+                        }
+
+                        try {
+                            // Get the original message by ID
+                            let originalMessage;
+                            if (row.original_message_id) {
+                                originalMessage = await targetChannel.messages.fetch(row.original_message_id);
+                            } else {
+                                // Fallback: search for the message by embed footer
+                                const messages = await targetChannel.messages.fetch({ limit: 100 });
+                                originalMessage = messages.find(msg => {
+                                    if (msg.embeds.length > 0) {
+                                        const embed = msg.embeds[0];
+                                        return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
+                                    }
+                                    return false;
+                                });
+                            }
+
+                            if (originalMessage) {
+                                // Check if there's already a thread for this message
+                                let thread = originalMessage.thread;
+
+                                if (!thread) {
+                                    // Create a new thread
+                                    thread = await originalMessage.startThread({
+                                        name: `📜 Arsip Hati`,
+                                        autoArchiveDuration: 60, // Auto archive after 1 hour
+                                        type: 12, // Private thread (GUILD_PRIVATE_THREAD)
+                                    });
+                                }
+
+                                // Create reply embed
+                                const replyEmbed = new EmbedBuilder()
+                                    .setTitle(`📖 "Lembar Terlarang"`)
+                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setColor('#9370DB')
+                                    .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                    .setTimestamp();
+
+                                // Create additional reply button
+                                const additionalReplyButton = new ButtonBuilder()
+                                    .setLabel('✉️ Reply Again')
+                                    .setStyle(ButtonStyle.Secondary)
+                                    .setCustomId(`btn_additional_reply_${letterId}`);
+
+                                const buttonRow = new ActionRowBuilder().addComponents(additionalReplyButton);
+
+                                // Send the reply in the thread
+                                await thread.send({
+                                    embeds: [replyEmbed],
+                                    components: [buttonRow]
+                                });
+
+                                // Send DM to the original sender
+                                try {
+                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                    const dmEmbed = new EmbedBuilder()
+                                        .setTitle('🥀｜Balasan Tiba')
+                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setColor('#9370DB')
+                                        .setTimestamp();
+
+                                    await originalSender.send({ embeds: [dmEmbed] });
+                                } catch (dmError) {
+                                    // If DM fails, it's likely because the user has DMs disabled
+                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                                }
+
+                                await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+                            } else {
+                                // If we can't find the original message, send to the main channel
+                                const replyEmbed = new EmbedBuilder()
+                                    .setTitle(`📖 "Lembar Terlarang"`)
+                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setColor('#9370DB')
+                                    .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                    .setTimestamp();
+
+                                // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
+                                const writeLetterButton = new ButtonBuilder()
+                                    .setLabel('💌 Love Letter')
+                                    .setStyle('Primary')
+                                    .setCustomId('btn_open_letter_modal');
+
+                                const additionalReplyButton = new ButtonBuilder()
+                                    .setLabel('✉️ Reply Again')
+                                    .setStyle(ButtonStyle.Secondary)
+                                    .setCustomId(`btn_additional_reply_${letterId}`);
+
+                                const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
+
+                                try {
+                                    await targetChannel.send({
+                                        content: `🖋️ "Teruntuk Sang Pemilik Nama" <@${row.sender_id}>`, // Mention the original sender for notification
+                                        embeds: [replyEmbed],
+                                        components: [buttonRow]
+                                    });
+                                } catch (sendError) {
+                                    console.error('Error sending reply to target channel:', {
+                                        message: sendError.message,
+                                        code: sendError.code,
+                                        name: sendError.name
+                                    });
+
+                                    // Handle specific Discord API errors
+                                    if (sendError.code === 50013) { // Missing Permissions
+                                        console.error('Bot lacks permissions to send messages in the target channel.');
+                                        await interaction.editReply({
+                                            content: 'Bot lacks permissions to send messages in the target channel.',
+                                            ephemeral: true
+                                        });
+                                        return;
+                                    } else if (sendError.code === 10003) { // Unknown Channel
+                                        console.error('Target channel does not exist or is inaccessible.');
+                                        await interaction.editReply({
+                                            content: 'Target channel does not exist or is inaccessible.',
+                                            ephemeral: true
+                                        });
+                                        return;
+                                    } else if (sendError.code === 50001) { // Missing Access
+                                        console.error('Bot lacks access to view the target channel.');
+                                        await interaction.editReply({
+                                            content: 'Bot lacks access to view the target channel.',
+                                            ephemeral: true
+                                        });
+                                        return;
+                                    } else {
+                                        // For other errors, try to inform the user without crashing
+                                        await interaction.editReply({
+                                            content: 'An error occurred while sending the message.',
+                                            flags: 64
+                                        });
+                                        return;
+                                    }
+                                }
+
+                                // Send DM to the original sender
+                                try {
+                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                    const dmEmbed = new EmbedBuilder()
+                                        .setTitle('🥀｜Balasan Tiba')
+                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setColor('#9370DB')
+                                        .setTimestamp();
+
+                                    await originalSender.send({ embeds: [dmEmbed] });
+                                } catch (dmError) {
+                                    // If DM fails, it's likely because the user has DMs disabled
+                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                                }
+
+                                await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                // ALSO send to the staff log channel
+                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                if (logChannel) {
+                                    try {
+                                        const logEmbed = new EmbedBuilder()
+                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                            .setColor('#811331')
+                                            .setThumbnail(interaction.user.displayAvatarURL())
+                                            .setDescription(replyContent)
+                                            .addFields(
+                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                            )
+                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                            .setTimestamp();
+
+                                        await logChannel.send({ embeds: [logEmbed] });
+                                    } catch (logError) {
+                                        console.error('Error sending to log channel:', logError);
+                                        // Don't fail the main operation if logging fails
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error sending reply:', error);
+                            await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', flags: 64 });
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error processing reply submission:', error);
+                    await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', flags: 64 });
+                }
+            }
+            // Handle additional replies in threads
+            else if (interaction.customId.startsWith('modal_additional_reply_')) {
+                await interaction.deferReply({ flags: 64 }); // Use deferReply for modal submissions
+
+                try {
+                    const letterId = interaction.customId.split('_')[3];
+                    const replyContent = interaction.fields.getTextInputValue('input_reply_content');
+                    const replySenderName = interaction.fields.getTextInputValue('input_reply_sender_name');
+
+                    // LOGIKA: Pakai nama custom, kalau kosong pakai Tag Discord asli
+                    const replyDisplayName = replySenderName && replySenderName.trim() !== ""
+                        ? replySenderName
+                        : interaction.user.tag;
+
+                    // Get the original letter info
+                    const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
+                    db.get(query, [parseInt(letterId)], async (err, row) => {
+                        if (err) {
+                            console.error('Database error:', err);
+                            await interaction.editReply({ content: 'Database error occurred!', flags: 64 });
+                            return;
+                        }
+
+                        if (!row) {
+                            await interaction.editReply({ content: 'Original letter not found!', flags: 64 });
+                            return;
+                        }
+
+                        // Find the original message in the confession setup channel
+                        const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
+                        if (!targetChannel) {
+                            await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', flags: 64 });
+                            return;
+                        }
+
+                        try {
+                            // Get the original message by ID
+                            let originalMessage;
+                            if (row.original_message_id) {
+                                originalMessage = await targetChannel.messages.fetch(row.original_message_id);
+                            } else {
+                                // Fallback: search for the message by embed footer
+                                const messages = await targetChannel.messages.fetch({ limit: 100 });
+                                originalMessage = messages.find(msg => {
+                                    if (msg.embeds.length > 0) {
+                                        const embed = msg.embeds[0];
+                                        return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
+                                    }
+                                    return false;
+                                });
+                            }
+
+                            if (originalMessage && originalMessage.thread) {
+                                // Send additional reply in the existing thread
+                                const replyEmbed = new EmbedBuilder()
+                                    .setTitle(`📖 "Lembar Terlarang"`)
+                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setColor('#9370DB')
+                                    .setTimestamp();
+
+                                // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
+                                const writeLetterButton = new ButtonBuilder()
+                                    .setLabel('💌 Love Letter')
+                                    .setStyle('Primary')
+                                    .setCustomId('btn_open_letter_modal');
+
+                                const additionalReplyButton = new ButtonBuilder()
+                                    .setLabel('✉️ Reply Again')
+                                    .setStyle(ButtonStyle.Secondary)
+                                    .setCustomId(`btn_additional_reply_${letterId}`);
+
+                                const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
+
+                                await originalMessage.thread.send({
+                                    embeds: [replyEmbed],
+                                    components: [buttonRow]
+                                });
+
+                                // Send DM to the original sender
+                                try {
+                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                    const dmEmbed = new EmbedBuilder()
+                                        .setTitle('🥀｜Balasan Tiba')
+                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setColor('#9370DB')
+                                        .setTimestamp();
+
+                                    await originalSender.send({ embeds: [dmEmbed] });
+                                } catch (dmError) {
+                                    // If DM fails, it's likely because the user has DMs disabled
+                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                                }
+
+                                await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+                            } else {
+                                // If no thread exists, create one
+                                let thread;
+                                if (originalMessage) {
+                                    thread = await originalMessage.startThread({
+                                        name: `📜 Arsip Hati`,
+                                        autoArchiveDuration: 60,
+                                        type: 12, // Private thread (GUILD_PRIVATE_THREAD)
+                                    });
+                                } else {
+                                    // If we can't find the original message, send to the main channel
+                                    const replyEmbed = new EmbedBuilder()
+                                        .setTitle(`📖 "Lembar Terlarang"`)
+                                        .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                        .setColor('#9370DB')
+                                        .setTimestamp();
+
+                                    // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
+                                    const writeLetterButton = new ButtonBuilder()
+                                        .setLabel('💌 Love Letter')
+                                        .setStyle('Primary')
+                                        .setCustomId('btn_open_letter_modal');
+
+                                    const additionalReplyButton = new ButtonBuilder()
+                                        .setLabel('✉️ Reply Again')
+                                        .setStyle(ButtonStyle.Secondary)
+                                        .setCustomId(`btn_additional_reply_${letterId}`);
+
+                                    const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
+
+                                    try {
+                                        await targetChannel.send({
+                                            content: `🖋️ "Teruntuk Sang Pemilik Nama" <@${row.sender_id}>`, // Mention the original sender for notification
+                                            embeds: [replyEmbed],
+                                            components: [buttonRow]
+                                        });
+                                    } catch (sendError) {
+                                        console.error('Error sending reply to target channel:', {
+                                            message: sendError.message,
+                                            code: sendError.code,
+                                            name: sendError.name
+                                        });
+
+                                        // Handle specific Discord API errors
+                                        if (sendError.code === 50013) { // Missing Permissions
+                                            console.error('Bot lacks permissions to send messages in the target channel.');
+                                            await interaction.editReply({
+                                                content: 'Bot lacks permissions to send messages in the target channel.',
+                                                ephemeral: true
+                                            });
+                                            return;
+                                        } else if (sendError.code === 10003) { // Unknown Channel
+                                            console.error('Target channel does not exist or is inaccessible.');
+                                            await interaction.editReply({
+                                                content: 'Target channel does not exist or is inaccessible.',
+                                                flags: 64
+                                            });
+                                            return;
+                                        } else if (sendError.code === 50001) { // Missing Access
+                                            console.error('Bot lacks access to view the target channel.');
+                                            await interaction.editReply({
+                                                content: 'Bot lacks access to view the target channel.',
+                                                flags: 64
+                                            });
+                                            return;
+                                        } else {
+                                            // For other errors, try to inform the user without crashing
+                                            await interaction.editReply({
+                                                content: 'An error occurred while sending the message.',
+                                                ephemeral: true
+                                            });
+                                            return;
+                                        }
+                                    }
+
+                                    await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                    // ALSO send to the staff log channel
+                                    const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                    if (logChannel) {
+                                        try {
+                                            const logEmbed = new EmbedBuilder()
+                                                .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                                .setColor('#811331')
+                                                .setThumbnail(interaction.user.displayAvatarURL())
+                                                .setDescription(replyContent)
+                                                .addFields(
+                                                    { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                    { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                    { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                                )
+                                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                                .setTimestamp();
+
+                                            await logChannel.send({ embeds: [logEmbed] });
+                                        } catch (logError) {
+                                            console.error('Error sending to log channel:', logError);
+                                            // Don't fail the main operation if logging fails
+                                        }
+                                    }
+                                    return;
+                                }
+
+                                const replyEmbed = new EmbedBuilder()
+                                    .setTitle(`📖 "Lembar Terlarang"`)
+                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setColor('#9370DB')
+                                    .setTimestamp();
+
+                                // Create additional reply button
+                                const additionalReplyButton = new ButtonBuilder()
+                                    .setLabel('✉️ Reply Again')
+                                    .setStyle(ButtonStyle.Secondary)
+                                    .setCustomId(`btn_additional_reply_${letterId}`);
+
+                                const buttonRow = new ActionRowBuilder().addComponents(additionalReplyButton);
+
+                                await thread.send({
+                                    embeds: [replyEmbed],
+                                    components: [buttonRow]
+                                });
+
+                                // Send DM to the original sender
+                                try {
+                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                    const dmEmbed = new EmbedBuilder()
+                                        .setTitle('🥀｜Balasan Tiba')
+                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setColor('#9370DB')
+                                        .setTimestamp();
+
+                                    await originalSender.send({ embeds: [dmEmbed] });
+                                } catch (dmError) {
+                                    // If DM fails, it's likely because the user has DMs disabled
+                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                                }
+
+                                await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                // ALSO send to the staff log channel
+                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                if (logChannel) {
+                                    try {
+                                        const logEmbed = new EmbedBuilder()
+                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                            .setColor('#811331')
+                                            .setThumbnail(interaction.user.displayAvatarURL())
+                                            .setDescription(replyContent)
+                                            .addFields(
+                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                            )
+                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                            .setTimestamp();
+
+                                        await logChannel.send({ embeds: [logEmbed] });
+                                    } catch (logError) {
+                                        console.error('Error sending to log channel:', logError);
+                                        // Don't fail the main operation if logging fails
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error sending additional reply:', error);
+                            await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', flags: 64 });
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error processing additional reply submission:', error);
+                    await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', flags: 64 });
+                }
+            }
+        }
+
+        // Handle Modal Submissions
+        if (interaction.isModalSubmit()) {
+            console.log('--- DEBUG MODAL ---');
+            console.log('ID yang Diterima:', `"${interaction.customId}"`);
+
+            // Check which modal is being handled
+            if (interaction.customId && interaction.customId === 'modal_cari_jodoh') {
+                console.log('ID yang Dicari:', '"modal_cari_jodoh"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_cari_jodoh');
+            } else if (interaction.customId && interaction.customId === 'modal_saran_user') {
+                console.log('ID yang Dicari:', '"modal_saran_user"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user');
+            } else if (interaction.customId && interaction.customId === 'modal_saran_user_from_msg') {
+                console.log('ID yang Dicari:', '"modal_saran_user_from_msg"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user_from_msg');
+            } else if (interaction.customId && interaction.customId.startsWith('modal_chat_me_')) {
+                console.log('ID yang Dicari:', '"modal_chat_me_"');
+                console.log('Apakah Cocok?', interaction.customId.startsWith('modal_chat_me_'));
+            } else if (interaction.customId && interaction.customId === 'modal_letter_submit') {
+                console.log('ID yang Dicari:', '"modal_letter_submit"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_letter_submit');
+            } else if (interaction.customId && interaction.customId.startsWith('modal_reply_submit_')) {
+                console.log('ID yang Dicari:', '"modal_reply_submit_"');
+                console.log('Apakah Cocok?', interaction.customId.startsWith('modal_reply_submit_'));
+            } else if (interaction.customId && interaction.customId.startsWith('modal_additional_reply_')) {
+                console.log('ID yang Dicari:', '"modal_additional_reply_"');
+                console.log('Apakah Cocok?', interaction.customId.startsWith('modal_additional_reply_'));
+            } else {
+                console.log('ID yang Dicari:', 'other modal types');
+                console.log('Apakah Cocok?', 'N/A - Custom handling');
+            }
+
+            // Handle Find Match modal submission
+            if (interaction.customId && interaction.customId === 'modal_cari_jodoh') {
+                console.log('BERHASIL MASUK KE BLOK MODAL!');
+
+                try {
+                    // Anti-Timeout: Defer reply immediately using flags instead of ephemeral
+                    await interaction.deferReply({ flags: 64 });
+
+                    // Logging Diagnosa: Log saat data mulai diambil
+                    console.log('Starting to retrieve form data from modal submission');
+
+                    // Sinkronisasi ID Input: Using the correct input IDs
+                    const nama = interaction.fields.getTextInputValue('j_nama');
+                    const umur = interaction.fields.getTextInputValue('j_umur');
+                    const gender = interaction.fields.getTextInputValue('j_gender');
+                    const hobi = interaction.fields.getTextInputValue('j_hobi');
+                    const tipe = interaction.fields.getTextInputValue('j_tipe');
+
+                    // Log the retrieved values
+                    console.log('Retrieved form values:', {
+                        nama: nama,
+                        umur: umur,
+                        gender: gender,
+                        hobi: hobi,
+                        tipe: tipe
+                    });
+
+                    // Validate that all required values exist
+                    if (!nama || !umur || !gender || !hobi || !tipe) {
+                        await interaction.editReply({
+                            content: 'Semua field formulir harus diisi. Mohon lengkapi semua data.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Log the environment variable
+                    console.log('JODOH_CHANNEL_ID from env:', process.env.MATCHMAKING_CHANNEL_ID);
+
+                    // Get the matchmaking channel from environment variable
+                    const matchmakingChannelId = process.env.MATCHMAKING_CHANNEL_ID;
+
+                    // Check if channel ID is configured
+                    if (!matchmakingChannelId) {
+                        await interaction.editReply({
+                            content: 'Kanal cari jodoh belum dikonfigurasi. Silakan hubungi administrator.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Get the matchmaking channel
+                    const matchmakingChannel = client.channels.cache.get(matchmakingChannelId);
+
+                    // Log when bot finds the channel object
+                    console.log('Matchmaking channel object found:', matchmakingChannel ? 'YES' : 'NO');
+
+                    // Check if channel exists
+                    if (!matchmakingChannel) {
+                        await interaction.editReply({
+                            content: 'Kanal cari jodoh tidak ditemukan. Silakan hubungi administrator.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Create embed with Output Estetik
+                    const profileEmbed = new EmbedBuilder()
+                        .setTitle('📜 Identitas Singkat')
+                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+                        .setColor('#811331')
+                        .addFields(
+                            { name: '👤 Nama', value: nama, inline: false },
+                            { name: '🎂 Usia', value: umur, inline: true },
+                            { name: '♂️/♀️ Gender', value: gender, inline: true },
+                            { name: '✨ Tentang Diriku', value: hobi, inline: false },
+                            { name: '🎯 Mencari Sosok...', value: tipe, inline: false }
+                        )
+                        .setFooter({ text: 'Yang tertarik bisa langsung DM ya!' })
+                        .setTimestamp();
+
+                    // Create buttons - "Isi Form Cari Jodoh" and "Chat Me"
+                    const jodohButton = new ButtonBuilder()
+                        .setLabel('Isi Form Cari Jodoh')
+                        .setEmoji('💌')
+                        .setStyle(ButtonStyle.Primary)
+                        .setCustomId('btn_cari_jodoh');
+
+                    const chatMeButton = new ButtonBuilder()
+                        .setLabel('Chat Me')
+                        .setEmoji('💬')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setCustomId(`btn_chat_me_${interaction.user.id}`); // Custom ID with user ID
+
+                    const row = new ActionRowBuilder()
+                        .addComponents(jodohButton, chatMeButton);
+
+                    // Send the profile to the matchmaking channel
+                    try {
+                        await matchmakingChannel.send({
+                            content: `✨ Ada formulir cari jodoh baru! <@${interaction.user.id}>`,
+                            embeds: [profileEmbed],
+                            components: [row]
+                        });
+                    } catch (sendError) {
+                        // Error Handling Ketat: Show complete error details
+                        console.error('Complete error details when sending to channel:', {
+                            message: sendError.message,
+                            stack: sendError.stack,
+                            code: sendError.code,
+                            name: sendError.name,
+                            status: sendError.status,
+                            method: sendError.method,
+                            path: sendError.path
+                        });
+
+                        await interaction.editReply({
+                            content: `Terjadi kesalahan saat mengirim profil ke kanal: ${sendError.message}`,
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Final Response: Success confirmation to user
+                    await interaction.editReply({
+                        content: 'Profil kamu telah berhasil dikirim! Orang-orang bisa melihat profil kamu sekarang.',
+                        flags: 64
+                    });
+                } catch (error) {
+                    // Error Handling Ketat: Show complete error details
+                    console.error('Complete error details in matchmaking form processing:', {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    });
+
+                    try {
+                        await interaction.editReply({
+                            content: `Terjadi kesalahan saat mengirim profil kamu: ${error.message}`,
+                            flags: 64
+                        });
+                    } catch (editError) {
+                        console.error('Failed to send error message to user:', editError);
+                    }
+                }
+            }
+            // Handle Chat Me modal submission
+            else if (interaction.customId && interaction.customId.startsWith('modal_chat_me_')) {
+                try {
+                    await interaction.deferReply({ flags: 64 });
+
+                    const targetUserId = interaction.customId.split('_')[3]; // Extract target user ID
+                    const messageContent = interaction.fields.getTextInputValue('chat_me_message');
+
+                    // Get the target user
+                    const targetUser = await client.users.fetch(targetUserId);
+                    if (!targetUser) {
+                        await interaction.editReply({
+                            content: 'Pengguna yang dituju tidak ditemukan.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Create embed for the message
+                    const messageEmbed = new EmbedBuilder()
+                        .setTitle('💌 Pesan Perkenalan Baru')
+                        .setDescription(messageContent)
+                        .setColor('#811331')
+                        .setAuthor({ name: `${interaction.user.username}#${interaction.user.discriminator}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
+                        .setTimestamp();
+
+                    try {
+                        // Send DM to the target user
+                        await targetUser.send({
+                            embeds: [messageEmbed],
+                            content: `💬 Kamu menerima pesan perkenalan dari <@${interaction.user.id}>!`
+                        });
+
+                        // Confirm to the sender
+                        await interaction.editReply({
+                            content: `Pesanmu telah dikirim ke <@${targetUser.id}>!`,
+                            flags: 64
+                        });
+                    } catch (dmError) {
+                        console.error('Error sending DM:', dmError);
+                        await interaction.editReply({
+                            content: 'Gagal mengirim pesan. Mungkin pengguna menonaktifkan pesan pribadi.',
+                            flags: 64
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error in chat me modal submission:', error);
+                    try {
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
+                            flags: 64
+                        });
+                    } catch (editError) {
+                        console.error('Failed to send error message:', editError);
+                    }
+                }
+            }
+            // Handle Feedback modal submission (for the feedback button)
+            else if (interaction.customId && interaction.customId === 'modal_saran_user') {
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+                const kategori = interaction.fields.getTextInputValue('kategori_saran');
+                const pesan = interaction.fields.getTextInputValue('pesan_saran');
+
+                // Ambil channel khusus admin untuk menerima laporan ini
+                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📒 Lembar Aspirasi')
+                    .setColor('#811331')
+                    .addFields(
+                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
+                        { name: '📂 Kategori', value: kategori, inline: true },
+                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
+                    )
+                    .setTimestamp();
+
+                // Check if log channel exists and bot has permissions
+                if (logChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
+
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
+                            // Still send success message to user but log the error
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            // Send without embed if no embed permission
+                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                        } else {
+                            await logChannel.send({ embeds: [logEmbed] });
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending feedback to log channel:', channelError);
+                        // Still send success message to user even if log channel fails
+                    }
+                } else {
+                    console.log('Feedback log channel not found or not configured');
+                }
+
+                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+            }
+            // Handle Feedback modal submission (for the feedback button from message)
+            else if (interaction.customId && interaction.customId === 'modal_saran_user_from_msg') {
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+                const kategori = interaction.fields.getTextInputValue('kategori_saran_from_msg');
+                const pesan = interaction.fields.getTextInputValue('pesan_saran_from_msg');
+
+                // Ambil channel khusus admin untuk menerima laporan ini
+                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+
+                const logEmbed = new EmbedBuilder()
+                    .setTitle('📒 Lembar Aspirasi')
+                    .setColor('#811331')
+                    .addFields(
+                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
+                        { name: '📂 Kategori', value: kategori, inline: true },
+                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
+                    )
+                    .setTimestamp();
+
+                // Check if log channel exists and bot has permissions
+                if (logChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
+
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
+                            // Still send success message to user but log the error
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            // Send without embed if no embed permission
+                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                        } else {
+                            await logChannel.send({ embeds: [logEmbed] });
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending feedback to log channel:', channelError);
+                        // Still send success message to user even if log channel fails
+                    }
+                } else {
+                    console.log('Feedback log channel not found or not configured');
+                }
+
+                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+            }
+            // Handle modal submission for new letter - UPDATED IMPLEMENTATION
+            else if (interaction.customId && interaction.customId === 'modal_letter_submit') {
+                await interaction.deferReply({ flags: 64 });
 
                 try {
                     // Debug logging for letter submission
@@ -492,15 +1333,6 @@ module.exports = async (client, interaction) => {
                             return;
                         }
 
-                        // Additional check: ensure the target user is in the same guild as the interaction
-                        const guildMember = interaction.guild.members.cache.get(targetUserLocal.id);
-                        if (!guildMember) {
-                            await interaction.editReply({
-                                content: `Pengguna "${inputToValue}" (${foundByLocal}) ditemukan, tetapi bukan merupakan anggota server ini. Anda hanya dapat mengirim surat ke anggota server ini.`
-                            });
-                            return;
-                        }
-
                         // Update the variables to be used later
                         targetUser = targetUserLocal;
                     } catch (error) {
@@ -515,25 +1347,41 @@ module.exports = async (client, interaction) => {
                     const isAnonymous = !inputFromValue || inputFromValue.trim() === '';
                     const displayName = isAnonymous ? '👤 Sang Pengagum Rahasia' : inputFromValue;
 
-                    // Insert into database
+                    // Insert into database using Promise wrapper with timeout
                     const insertQuery = `
                         INSERT INTO letters (sender_id, recipient_name, content, is_anonymous)
                         VALUES (?, ?, ?, ?)
                     `;
 
-                    db.run(insertQuery, [
-                        interaction.user.id,
-                        targetUser.username, // recipient_name
-                        inputContentValue,
-                        isAnonymous ? 1 : 0
-                    ], async function(err) {  // Make the callback async
-                        if (err) {
-                            console.error(err);
-                            await interaction.editReply({ content: 'Database error occurred while saving your letter.' });
-                            return;
-                        }
+                    const insertPromise = new Promise((resolve, reject) => {
+                        // Set a timeout for the database operation
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Database operation timed out'));
+                        }, 10000); // 10 second timeout
 
-                        const letterId = this.lastID; // Get the last inserted ID
+                        db.run(insertQuery, [
+                            interaction.user.id,
+                            targetUser.username, // recipient_name
+                            inputContentValue,
+                            isAnonymous ? 1 : 0
+                        ], function(err) {
+                            clearTimeout(timeout); // Clear the timeout if operation completes
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.lastID); // Get the last inserted ID
+                            }
+                        });
+                    });
+
+                    let letterId;
+                    try {
+                        letterId = await insertPromise;
+                    } catch (dbError) {
+                        console.error('Database error:', dbError);
+                        await interaction.editReply({ content: 'Database error occurred while saving your letter. Please try again.' });
+                        return;
+                    }
 
                         // Create embed for the letter
                         const letterEmbed = new EmbedBuilder()
@@ -604,11 +1452,28 @@ module.exports = async (client, interaction) => {
 
                             // Update the database with the original message ID
                             const updateQuery = 'UPDATE letters SET original_message_id = ? WHERE id = ?';
-                            db.run(updateQuery, [sentMessage.id, letterId], (updateErr) => {
-                                if (updateErr) {
-                                    console.error('Error updating original message ID:', updateErr);
-                                }
+
+                            const updatePromise = new Promise((resolve, reject) => {
+                                // Set a timeout for the database operation
+                                const timeout = setTimeout(() => {
+                                    reject(new Error('Database update operation timed out'));
+                                }, 10000); // 10 second timeout
+
+                                db.run(updateQuery, [sentMessage.id, letterId], (updateErr) => {
+                                    clearTimeout(timeout); // Clear the timeout if operation completes
+                                    if (updateErr) {
+                                        reject(updateErr);
+                                    } else {
+                                        resolve();
+                                    }
+                                });
                             });
+
+                            try {
+                                await updatePromise;
+                            } catch (updateError) {
+                                console.error('Error updating original message ID:', updateError);
+                            }
 
                             // Send DM to the recipient
                             try {
@@ -638,226 +1503,387 @@ module.exports = async (client, interaction) => {
                             await interaction.editReply({ content: 'Surat berhasil dikirim ke channel confess!', ephemeral: false });
                         } catch (sendError) {
                             console.error('Error sending message to channel:', sendError);
-                            await interaction.editReply({ content: 'There was an error sending your letter. Please try again later.' });
+
+                            // Handle specific Discord API errors
+                            if (sendError.code === 50013) { // Missing Permissions
+                                console.error('Bot lacks permissions to send messages in the confession channel.');
+                                await interaction.editReply({
+                                    content: 'Bot lacks permissions to send messages in the confession channel.',
+                                    ephemeral: true
+                                });
+                            } else if (sendError.code === 10003) { // Unknown Channel
+                                console.error('Confession channel does not exist or is inaccessible.');
+                                await interaction.editReply({
+                                    content: 'Confession channel does not exist or is inaccessible.',
+                                    ephemeral: true
+                                });
+                            } else if (sendError.code === 50001) { // Missing Access
+                                console.error('Bot lacks access to view the confession channel.');
+                                await interaction.editReply({
+                                    content: 'Bot lacks access to view the confession channel.',
+                                    ephemeral: true
+                                });
+                            } else {
+                                await interaction.editReply({ content: 'There was an error sending your letter. Please try again later.' });
+                            }
                         }
-                    });
+
+                        // NEW: ALSO send to the staff log channel (as requested in the original issue)
+                        const logChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
+                        const logChannel = interaction.guild.channels.cache.get(logChannelId);
+
+                        if (logChannel) {
+                            try {
+                                // Create embed for staff log
+                                const logEmbed = new EmbedBuilder()
+                                    .setTitle('💌 Warkah Confession Baru')
+                                    .setColor('#FF69B4')
+                                    .setThumbnail(interaction.user.displayAvatarURL())
+                                    .addFields(
+                                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
+                                        { name: '📝 Isi Pesan', value: `\`\`\`${inputContentValue}\`\`\`` }
+                                    )
+                                    .setTimestamp();
+
+                                await logChannel.send({ embeds: [logEmbed] });
+                            } catch (logError) {
+                                console.error('Error sending to log channel:', logError);
+                                // Don't fail the main operation if logging fails
+                            }
+                        }
                 } catch (error) {
                     console.error('Error processing letter submission:', error);
                     await interaction.editReply({ content: 'There was an error submitting your letter. Please try again later.' });
                 }
             }
-            // Handle modal submission for reply
-            else if (interaction.customId.startsWith('modal_reply_submit_')) {
-                await interaction.deferReply({ ephemeral: true }); // Use deferReply for modal submissions
+        }
+        // Handle modal submission for reply - FIXED TO USE STARTSWITH FOR DYNAMIC IDs AND CHECK IF CUSTOMID EXISTS
+        if (interaction.isModalSubmit() && interaction.customId && interaction.customId.startsWith('modal_reply_submit_')) {
+            await interaction.deferReply({ flags: 64 }); // Use deferReply for modal submissions
 
-                try {
-                    const letterId = interaction.customId.split('_')[3];
-                    const replyContent = interaction.fields.getTextInputValue('input_reply_content');
-                    const replyAnonValue = interaction.fields.getTextInputValue('input_reply_anon');
+            try {
+                const letterId = interaction.customId.split('_')[3];
+                const replyContent = interaction.fields.getTextInputValue('input_reply_content');
+                const replySenderName = interaction.fields.getTextInputValue('input_reply_sender_name');
 
-                    // Determine if anonymous
-                    const isReplyAnonymous = !replyAnonValue || replyAnonValue.trim() === '';
-                    const replyDisplayName = isReplyAnonymous ? '👤 Sang Pengagum Rahasia' : interaction.user.username;
+                // LOGIKA: Pakai nama custom, kalau kosong pakai Tag Discord asli
+                const replyDisplayName = replySenderName && replySenderName.trim() !== ""
+                    ? replySenderName
+                    : interaction.user.tag;
 
-                    // Get the original letter info
-                    const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
-                    db.get(query, [parseInt(letterId)], async (err, row) => {
-                        if (err) {
-                            console.error('Database error:', err);
-                            await interaction.editReply({ content: 'Database error occurred!', ephemeral: true });
-                            return;
-                        }
-
-                        if (!row) {
-                            await interaction.editReply({ content: 'Original letter not found!', ephemeral: true });
-                            return;
-                        }
-
-                        // Find the original message in the confession setup channel
-                        const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
-                        if (!targetChannel) {
-                            await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', ephemeral: true });
-                            return;
-                        }
-
-                        try {
-                            // Get the original message by ID
-                            let originalMessage;
-                            if (row.original_message_id) {
-                                originalMessage = await targetChannel.messages.fetch(row.original_message_id);
+                // Create a promise wrapper for the database query
+                const getLetterInfo = (letterId) => {
+                    return new Promise((resolve, reject) => {
+                        const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
+                        db.get(query, [parseInt(letterId)], (err, row) => {
+                            if (err) {
+                                reject(err);
                             } else {
-                                // Fallback: search for the message by embed footer
-                                const messages = await targetChannel.messages.fetch({ limit: 100 });
-                                originalMessage = messages.find(msg => {
-                                    if (msg.embeds.length > 0) {
-                                        const embed = msg.embeds[0];
-                                        return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
-                                    }
-                                    return false;
-                                });
+                                resolve(row);
                             }
-
-                            if (originalMessage) {
-                                // Check if there's already a thread for this message
-                                let thread = originalMessage.thread;
-
-                                if (!thread) {
-                                    // Create a new thread
-                                    thread = await originalMessage.startThread({
-                                        name: `📜 Arsip Hati`,
-                                        autoArchiveDuration: 60, // Auto archive after 1 hour
-                                        type: 12, // Private thread (GUILD_PRIVATE_THREAD)
-                                    });
-                                }
-
-                                // Create reply embed
-                                const replyEmbed = new EmbedBuilder()
-                                    .setTitle(`📖 "Lembar Terlarang"`)
-                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
-                                    .setColor('#9370DB')
-                                    .setTimestamp();
-
-                                // Create additional reply button
-                                const additionalReplyButton = new ButtonBuilder()
-                                    .setLabel('✉️ Reply Again')
-                                    .setStyle(ButtonStyle.Secondary)
-                                    .setCustomId(`btn_additional_reply_${letterId}`);
-
-                                const buttonRow = new ActionRowBuilder().addComponents(additionalReplyButton);
-
-                                // Send the reply in the thread
-                                await thread.send({
-                                    embeds: [replyEmbed],
-                                    components: [buttonRow]
-                                });
-
-                                // Send DM to the original sender
-                                try {
-                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
-                                    const dmEmbed = new EmbedBuilder()
-                                        .setTitle('🥀｜Balasan Tiba')
-                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
-                                        .setColor('#9370DB')
-                                        .setTimestamp();
-
-                                    await originalSender.send({ embeds: [dmEmbed] });
-                                } catch (dmError) {
-                                    // If DM fails, it's likely because the user has DMs disabled
-                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
-                                }
-
-                                await interaction.editReply({ content: 'Balasan berhasil dikirim!', ephemeral: true });
-                            } else {
-                                // If we can't find the original message, send to the main channel
-                                const replyEmbed = new EmbedBuilder()
-                                    .setTitle(`📖 "Lembar Terlarang"`)
-                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
-                                    .setColor('#9370DB')
-                                    .setTimestamp();
-
-                                // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
-                                const writeLetterButton = new ButtonBuilder()
-                                    .setLabel('💌 Love Letter')
-                                    .setStyle('Primary')
-                                    .setCustomId('btn_open_letter_modal');
-
-                                const additionalReplyButton = new ButtonBuilder()
-                                    .setLabel('✉️ Reply Again')
-                                    .setStyle(ButtonStyle.Secondary)
-                                    .setCustomId(`btn_additional_reply_${letterId}`);
-
-                                const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
-
-                                await targetChannel.send({
-                                    content: `🖋️ "Teruntuk Sang Pemilik Nama" <@${row.sender_id}>`, // Mention the original sender for notification
-                                    embeds: [replyEmbed],
-                                    components: [buttonRow]
-                                });
-
-                                // Send DM to the original sender
-                                try {
-                                    const originalSender = await interaction.client.users.fetch(row.sender_id);
-                                    const dmEmbed = new EmbedBuilder()
-                                        .setTitle('🥀｜Balasan Tiba')
-                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
-                                        .setColor('#9370DB')
-                                        .setTimestamp();
-
-                                    await originalSender.send({ embeds: [dmEmbed] });
-                                } catch (dmError) {
-                                    // If DM fails, it's likely because the user has DMs disabled
-                                    console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
-                                }
-
-                                await interaction.editReply({ content: 'Balasan berhasil dikirim!', ephemeral: true });
-                            }
-                        } catch (error) {
-                            console.error('Error sending reply:', error);
-                            await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', ephemeral: true });
-                        }
+                        });
                     });
-                } catch (error) {
-                    console.error('Error processing reply submission:', error);
-                    await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', ephemeral: true });
-                }
-            }
-            // Handle additional replies in threads
-            else if (interaction.customId.startsWith('modal_additional_reply_')) {
-                await interaction.deferReply({ ephemeral: true }); // Use deferReply for modal submissions
+                };
 
                 try {
-                    const letterId = interaction.customId.split('_')[3];
-                    const replyContent = interaction.fields.getTextInputValue('input_reply_content');
-                    const replyAnonValue = interaction.fields.getTextInputValue('input_reply_anon');
-
-                    // Determine if anonymous
-                    const isReplyAnonymous = !replyAnonValue || replyAnonValue.trim() === '';
-                    const replyDisplayName = isReplyAnonymous ? '👤 Sang Pengagum Rahasia' : interaction.user.username;
-
                     // Get the original letter info
-                    const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
-                    db.get(query, [parseInt(letterId)], async (err, row) => {
-                        if (err) {
-                            console.error('Database error:', err);
-                            await interaction.editReply({ content: 'Database error occurred!', ephemeral: true });
-                            return;
+                    const row = await getLetterInfo(letterId);
+
+                    if (!row) {
+                        await interaction.editReply({ content: 'Original letter not found!', flags: 64 });
+                        return;
+                    }
+
+                    // Find the original message in the confession setup channel
+                    const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
+                    if (!targetChannel) {
+                        await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', flags: 64 });
+                        return;
+                    }
+
+                    try {
+                        // Get the original message by ID
+                        let originalMessage;
+                        if (row.original_message_id) {
+                            originalMessage = await targetChannel.messages.fetch(row.original_message_id);
+                        } else {
+                            // Fallback: search for the message by embed footer
+                            const messages = await targetChannel.messages.fetch({ limit: 100 });
+                            originalMessage = messages.find(msg => {
+                                if (msg.embeds.length > 0) {
+                                    const embed = msg.embeds[0];
+                                    return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
+                                }
+                                return false;
+                            });
                         }
 
-                        if (!row) {
-                            await interaction.editReply({ content: 'Original letter not found!', ephemeral: true });
-                            return;
-                        }
+                        if (originalMessage) {
+                            // Check if there's already a thread for this message
+                            let thread = originalMessage.thread;
 
-                        // Find the original message in the confession setup channel
-                        const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
-                        if (!targetChannel) {
-                            await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', ephemeral: true });
-                            return;
-                        }
-
-                        try {
-                            // Get the original message by ID
-                            let originalMessage;
-                            if (row.original_message_id) {
-                                originalMessage = await targetChannel.messages.fetch(row.original_message_id);
-                            } else {
-                                // Fallback: search for the message by embed footer
-                                const messages = await targetChannel.messages.fetch({ limit: 100 });
-                                originalMessage = messages.find(msg => {
-                                    if (msg.embeds.length > 0) {
-                                        const embed = msg.embeds[0];
-                                        return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
-                                    }
-                                    return false;
+                            if (!thread) {
+                                // Create a new thread
+                                thread = await originalMessage.startThread({
+                                    name: `📜 Arsip Hati`,
+                                    autoArchiveDuration: 60, // Auto archive after 1 hour
+                                    type: 12, // Private thread (GUILD_PRIVATE_THREAD)
                                 });
                             }
+
+                            // Create reply embed
+                            const replyEmbed = new EmbedBuilder()
+                                .setTitle(`📖 "Lembar Terlarang"`)
+                                .setDescription(`${replyContent}\n\nDari: ${replyDisplayName}`)
+                                .setColor('#9370DB')
+                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                .setTimestamp();
+
+                            // Create additional reply button
+                            const additionalReplyButton = new ButtonBuilder()
+                                .setLabel('✉️ Reply Again')
+                                .setStyle(ButtonStyle.Secondary)
+                                .setCustomId(`btn_additional_reply_${letterId}`);
+
+                            const buttonRow = new ActionRowBuilder().addComponents(additionalReplyButton);
+
+                            // Send the reply in the thread
+                            await thread.send({
+                                embeds: [replyEmbed],
+                                components: [buttonRow]
+                            });
+
+                            // Send DM to the original sender
+                            try {
+                                const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                const dmEmbed = new EmbedBuilder()
+                                    .setTitle('🥀｜Balasan Tiba')
+                                    .setDescription(`^\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                    .setColor('#9370DB')
+                                    .setTimestamp();
+
+                                await originalSender.send({ embeds: [dmEmbed] });
+                            } catch (dmError) {
+                                // If DM fails, it's likely because the user has DMs disabled
+                                console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                            }
+
+                            await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                            // ALSO send to the staff log channel
+                            const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                            if (logChannel) {
+                                try {
+                                    const logEmbed = new EmbedBuilder()
+                                        .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                        .setColor('#811331')
+                                        .setThumbnail(interaction.user.displayAvatarURL())
+                                        .setDescription(replyContent)
+                                        .addFields(
+                                            { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                            { name: '📅 Status', value: 'Terkirim', inline: true },
+                                            { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                        )
+                                        .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                        .setTimestamp();
+
+                                    await logChannel.send({ embeds: [logEmbed] });
+                                } catch (logError) {
+                                    console.error('Error sending to log channel:', logError);
+                                    // Don't fail the main operation if logging fails
+                                }
+                            }
+                        } else {
+                            // If we can't find the original message, send to the main channel
+                            const replyEmbed = new EmbedBuilder()
+                                .setTitle(`📖 "Lembar Terlarang"`)
+                                .setDescription(`^\n\nDari: ${replyDisplayName}`)
+                                .setColor('#9370DB')
+                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                .setTimestamp();
+
+                            // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
+                            const writeLetterButton = new ButtonBuilder()
+                                .setLabel('💌 Love Letter')
+                                .setStyle('Primary')
+                                .setCustomId('btn_open_letter_modal');
+
+                            const additionalReplyButton = new ButtonBuilder()
+                                .setLabel('✉️ Reply Again')
+                                .setStyle(ButtonStyle.Secondary)
+                                .setCustomId(`btn_additional_reply_${letterId}`);
+
+                            const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
+
+                            try {
+                                await targetChannel.send({
+                                    content: `^\n\nDari: ${row.sender_id}>`, // Mention the original sender for notification
+                                    embeds: [replyEmbed],
+                                    components: [buttonRow]
+                                });
+                            } catch (sendError) {
+                                console.error('Error sending reply to target channel:', {
+                                    message: sendError.message,
+                                    code: sendError.code,
+                                    name: sendError.name
+                                });
+
+                                // Handle specific Discord API errors
+                                if (sendError.code === 50013) { // Missing Permissions
+                                    console.error('Bot lacks permissions to send messages in the target channel.');
+                                    await interaction.editReply({
+                                        content: 'Bot lacks permissions to send messages in the target channel.',
+                                        flags: 64
+                                    });
+                                    return;
+                                } else if (sendError.code === 10003) { // Unknown Channel
+                                    console.error('Target channel does not exist or is inaccessible.');
+                                    await interaction.editReply({
+                                        content: 'Target channel does not exist or is inaccessible.',
+                                        ephemeral: true
+                                    });
+                                    return;
+                                } else if (sendError.code === 50001) { // Missing Access
+                                    console.error('Bot lacks access to view the target channel.');
+                                    await interaction.editReply({
+                                        content: 'Bot lacks access to view the target channel.',
+                                        ephemeral: true
+                                    });
+                                    return;
+                                } else {
+                                    // For other errors, try to inform the user without crashing
+                                    await interaction.editReply({
+                                        content: 'An error occurred while sending the message.',
+                                        ephemeral: true
+                                    });
+                                    return;
+                                }
+                            }
+
+                            // Send DM to the original sender
+                            try {
+                                const originalSender = await interaction.client.users.fetch(row.sender_id);
+                                const dmEmbed = new EmbedBuilder()
+                                    .setTitle('🥀｜Balasan Tiba')
+                                    .setDescription(`^\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                    .setColor('#9370DB')
+                                    .setTimestamp();
+
+                                await originalSender.send({ embeds: [dmEmbed] });
+                            } catch (dmError) {
+                                // If DM fails, it's likely because the user has DMs disabled
+                                console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
+                            }
+
+                            await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                            // ALSO send to the staff log channel
+                            const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                            if (logChannel) {
+                                try {
+                                    const logEmbed = new EmbedBuilder()
+                                        .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                        .setColor('#811331')
+                                        .setThumbnail(interaction.user.displayAvatarURL())
+                                        .setDescription(replyContent)
+                                        .addFields(
+                                            { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                            { name: '📅 Status', value: 'Terkirim', inline: true },
+                                            { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                        )
+                                        .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                        .setTimestamp();
+
+                                    await logChannel.send({ embeds: [logEmbed] });
+                                } catch (logError) {
+                                    console.error('Error sending to log channel:', logError);
+                                    // Don't fail the main operation if logging fails
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error sending reply:', error);
+                        await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', flags: 64 });
+                    }
+                } catch (dbError) {
+                    console.error('Database error:', dbError);
+                    await interaction.editReply({ content: 'Database error occurred!', flags: 64 });
+                    return;
+                }
+            } catch (error) {
+                console.error('Error processing reply submission:', error);
+                await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', flags: 64 });
+            }
+            return; // Stop processing other handlers for this interaction
+        }
+        // Handle additional replies in threads
+        else if (interaction.customId && interaction.customId.startsWith('modal_additional_reply_')) {
+            await interaction.deferReply({ flags: 64 }); // Use deferReply for modal submissions
+
+            try {
+                const letterId = interaction.customId.split('_')[3];
+                const replyContent = interaction.fields.getTextInputValue('input_reply_content');
+                const replySenderName = interaction.fields.getTextInputValue('input_reply_sender_name');
+
+                // LOGIKA: Pakai nama custom, kalau kosong pakai Tag Discord asli
+                const replyDisplayName = replySenderName && replySenderName.trim() !== ""
+                    ? replySenderName
+                    : interaction.user.tag;
+
+                // Create a promise wrapper for the database query
+                const getLetterInfo = (letterId) => {
+                    return new Promise((resolve, reject) => {
+                        const query = 'SELECT sender_id, recipient_name, original_message_id FROM letters WHERE id = ?';
+                        db.get(query, [parseInt(letterId)], (err, row) => {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+                };
+
+                try {
+                    // Get the original letter info
+                    const row = await getLetterInfo(letterId);
+
+                    if (!row) {
+                        await interaction.editReply({ content: 'Original letter not found!', flags: 64 });
+                        return;
+                    }
+
+                    // Find the original message in the confession setup channel
+                    const targetChannel = client.channels.cache.get(process.env.CONFESSION_SETUP_CHANNEL_ID);
+                    if (!targetChannel) {
+                        await interaction.editReply({ content: 'Confession setup channel not found. Please contact the administrator.', flags: 64 });
+                        return;
+                    }
+
+                    try {
+                        // Get the original message by ID
+                        let originalMessage;
+                        if (row.original_message_id) {
+                            originalMessage = await targetChannel.messages.fetch(row.original_message_id);
+                        } else {
+                            // Fallback: search for the message by embed footer
+                            const messages = await targetChannel.messages.fetch({ limit: 100 });
+                            originalMessage = messages.find(msg => {
+                                if (msg.embeds.length > 0) {
+                                    const embed = msg.embeds[0];
+                                    return embed.footer && embed.footer.text.includes('📜 Arsip Hati');
+                                }
+                                return false;
+                            });
+                        }
 
                             if (originalMessage && originalMessage.thread) {
                                 // Send additional reply in the existing thread
                                 const replyEmbed = new EmbedBuilder()
                                     .setTitle(`📖 "Lembar Terlarang"`)
-                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setDescription(`^\n\nDari: ${replyDisplayName}`)
                                     .setColor('#9370DB')
+                                    .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
                                     .setTimestamp();
 
                                 // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
@@ -883,7 +1909,7 @@ module.exports = async (client, interaction) => {
                                     const originalSender = await interaction.client.users.fetch(row.sender_id);
                                     const dmEmbed = new EmbedBuilder()
                                         .setTitle('🥀｜Balasan Tiba')
-                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setDescription(`^\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
                                         .setColor('#9370DB')
                                         .setTimestamp();
 
@@ -893,7 +1919,31 @@ module.exports = async (client, interaction) => {
                                     console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
                                 }
 
-                                await interaction.editReply({ content: 'Balasan lanjutan berhasil dikirim!', ephemeral: true });
+                                await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                // ALSO send to the staff log channel
+                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                if (logChannel) {
+                                    try {
+                                        const logEmbed = new EmbedBuilder()
+                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                            .setColor('#811331')
+                                            .setThumbnail(interaction.user.displayAvatarURL())
+                                            .setDescription(replyContent)
+                                            .addFields(
+                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                            )
+                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                            .setTimestamp();
+
+                                        await logChannel.send({ embeds: [logEmbed] });
+                                    } catch (logError) {
+                                        console.error('Error sending to log channel:', logError);
+                                        // Don't fail the main operation if logging fails
+                                    }
+                                }
                             } else {
                                 // If no thread exists, create one
                                 let thread;
@@ -907,8 +1957,9 @@ module.exports = async (client, interaction) => {
                                     // If we can't find the original message, send to the main channel
                                     const replyEmbed = new EmbedBuilder()
                                         .setTitle(`📖 "Lembar Terlarang"`)
-                                        .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                        .setDescription(`^\n\nDari: ${replyDisplayName}`)
                                         .setColor('#9370DB')
+                                        .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
                                         .setTimestamp();
 
                                     // Create buttons - "Love Letter" on the left, "✉️ Reply Again" on the right
@@ -924,20 +1975,84 @@ module.exports = async (client, interaction) => {
 
                                     const buttonRow = new ActionRowBuilder().addComponents(writeLetterButton, additionalReplyButton);
 
-                                    await targetChannel.send({
-                                        content: `🖋️ "Teruntuk Sang Pemilik Nama" <@${row.sender_id}>`, // Mention the original sender for notification
-                                        embeds: [replyEmbed],
-                                        components: [buttonRow]
-                                    });
+                                    try {
+                                        await targetChannel.send({
+                                            content: `^\n\nDari: ${row.sender_id}>`, // Mention the original sender for notification
+                                            embeds: [replyEmbed],
+                                            components: [buttonRow]
+                                        });
+                                    } catch (sendError) {
+                                        console.error('Error sending reply to target channel:', {
+                                            message: sendError.message,
+                                            code: sendError.code,
+                                            name: sendError.name
+                                        });
 
-                                    await interaction.editReply({ content: 'Balasan lanjutan berhasil dikirim!', ephemeral: true });
+                                        // Handle specific Discord API errors
+                                        if (sendError.code === 50013) { // Missing Permissions
+                                            console.error('Bot lacks permissions to send messages in the target channel.');
+                                            await interaction.editReply({
+                                                content: 'Bot lacks permissions to send messages in the target channel.',
+                                                ephemeral: true
+                                            });
+                                            return;
+                                        } else if (sendError.code === 10003) { // Unknown Channel
+                                            console.error('Target channel does not exist or is inaccessible.');
+                                            await interaction.editReply({
+                                                content: 'Target channel does not exist or is inaccessible.',
+                                                flags: 64
+                                            });
+                                            return;
+                                        } else if (sendError.code === 50001) { // Missing Access
+                                            console.error('Bot lacks access to view the target channel.');
+                                            await interaction.editReply({
+                                                content: 'Bot lacks access to view the target channel.',
+                                                flags: 64
+                                            });
+                                            return;
+                                        } else {
+                                            // For other errors, try to inform the user without crashing
+                                            await interaction.editReply({
+                                                content: 'An error occurred while sending the message.',
+                                                ephemeral: true
+                                            });
+                                            return;
+                                        }
+                                    }
+
+                                    await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                    // ALSO send to the staff log channel
+                                    const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                    if (logChannel) {
+                                        try {
+                                            const logEmbed = new EmbedBuilder()
+                                                .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                                .setColor('#811331')
+                                                .setThumbnail(interaction.user.displayAvatarURL())
+                                                .setDescription(replyContent)
+                                                .addFields(
+                                                    { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                    { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                    { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                                )
+                                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                                .setTimestamp();
+
+                                            await logChannel.send({ embeds: [logEmbed] });
+                                        } catch (logError) {
+                                            console.error('Error sending to log channel:', logError);
+                                            // Don't fail the main operation if logging fails
+                                        }
+                                    }
                                     return;
                                 }
 
                                 const replyEmbed = new EmbedBuilder()
                                     .setTitle(`📖 "Lembar Terlarang"`)
-                                    .setDescription(`🖋️ "Goresan Tanpa Tinta": ${replyContent}\n\nDari: ${replyDisplayName}`)
+                                    .setDescription(`^\n\nDari: ${replyDisplayName}`)
                                     .setColor('#9370DB')
+                                    .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
                                     .setTimestamp();
 
                                 // Create additional reply button
@@ -958,7 +2073,7 @@ module.exports = async (client, interaction) => {
                                     const originalSender = await interaction.client.users.fetch(row.sender_id);
                                     const dmEmbed = new EmbedBuilder()
                                         .setTitle('🥀｜Balasan Tiba')
-                                        .setDescription(`🥀 Seseorang sedang merangkai rindu untukmu di "${interaction.guild.name}"...\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
+                                        .setDescription(`^\n\nHalo, ada sebuah naskah manis yang baru saja dititipkan khusus untukmu. Isinya penuh dengan perasaan yang jujur dan hangat.\n\nSilakan luangkan waktumu sejenak untuk membacanya di channel confess. Jika jemarimu ingin membalas, ia akan sangat senang menantinya.\n\nTemukan suratmu di sini: <#${process.env.CONFESSION_SETUP_CHANNEL_ID}>`)
                                         .setColor('#9370DB')
                                         .setTimestamp();
 
@@ -968,359 +2083,46 @@ module.exports = async (client, interaction) => {
                                     console.warn(`Could not send DM to user ${row.sender_id}:`, dmError.message);
                                 }
 
-                                await interaction.editReply({ content: 'Balasan lanjutan berhasil dikirim!', ephemeral: true });
+                                await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
+
+                                // ALSO send to the staff log channel
+                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                                if (logChannel) {
+                                    try {
+                                        const logEmbed = new EmbedBuilder()
+                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
+                                            .setColor('#811331')
+                                            .setThumbnail(interaction.user.displayAvatarURL())
+                                            .setDescription(replyContent)
+                                            .addFields(
+                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
+                                                { name: '📅 Status', value: 'Terkirim', inline: true },
+                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
+                                            )
+                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
+                                            .setTimestamp();
+
+                                        await logChannel.send({ embeds: [logEmbed] });
+                                    } catch (logError) {
+                                        console.error('Error sending to log channel:', logError);
+                                        // Don't fail the main operation if logging fails
+                                    }
+                                }
                             }
                         } catch (error) {
                             console.error('Error sending additional reply:', error);
-                            await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', ephemeral: true });
+                            await interaction.editReply({ content: 'There was an error sending your reply. Please try again later.', flags: 64 });
                         }
-                    });
+                    } catch (dbError) {
+                        console.error('Database error:', dbError);
+                        await interaction.editReply({ content: 'Database error occurred!', flags: 64 });
+                        return;
+                    }
                 } catch (error) {
                     console.error('Error processing additional reply submission:', error);
-                    await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', ephemeral: true });
+                    await interaction.editReply({ content: 'There was an error submitting your reply. Please try again later.', flags: 64 });
                 }
-            }
-        }
-
-        // Handle Modal Submissions
-        if (interaction.isModalSubmit()) {
-            console.log('--- DEBUG MODAL ---');
-            console.log('ID yang Diterima:', `"${interaction.customId}"`);
-
-            // Check which modal is being handled
-            if (interaction.customId === 'modal_cari_jodoh') {
-                console.log('ID yang Dicari:', '"modal_cari_jodoh"');
-                console.log('Apakah Cocok?', interaction.customId === 'modal_cari_jodoh');
-            } else if (interaction.customId === 'modal_saran_user') {
-                console.log('ID yang Dicari:', '"modal_saran_user"');
-                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user');
-            } else if (interaction.customId === 'modal_saran_user_from_msg') {
-                console.log('ID yang Dicari:', '"modal_saran_user_from_msg"');
-                console.log('Apakah Cocok?', interaction.customId === 'modal_saran_user_from_msg');
-            } else if (interaction.customId.startsWith('modal_chat_me_')) {
-                console.log('ID yang Dicari:', '"modal_chat_me_"');
-                console.log('Apakah Cocok?', interaction.customId.startsWith('modal_chat_me_'));
-            } else {
-                console.log('ID yang Dicari:', 'other modal types');
-                console.log('Apakah Cocok?', 'N/A - Custom handling');
-            }
-
-            // Handle Find Match modal submission
-            if (interaction.customId === 'modal_cari_jodoh') {
-                console.log('BERHASIL MASUK KE BLOK MODAL!');
-
-                try {
-                    // Anti-Timeout: Defer reply immediately using flags instead of ephemeral
-                    await interaction.deferReply({ flags: 64 });
-
-                    // Logging Diagnosa: Log saat data mulai diambil
-                    console.log('Starting to retrieve form data from modal submission');
-
-                    // Sinkronisasi ID Input: Using the correct input IDs
-                    const nama = interaction.fields.getTextInputValue('j_nama');
-                    const umur = interaction.fields.getTextInputValue('j_umur');
-                    const gender = interaction.fields.getTextInputValue('j_gender');
-                    const hobi = interaction.fields.getTextInputValue('j_hobi');
-                    const tipe = interaction.fields.getTextInputValue('j_tipe');
-
-                    // Log the retrieved values
-                    console.log('Retrieved form values:', {
-                        nama: nama,
-                        umur: umur,
-                        gender: gender,
-                        hobi: hobi,
-                        tipe: tipe
-                    });
-
-                    // Validate that all required values exist
-                    if (!nama || !umur || !gender || !hobi || !tipe) {
-                        await interaction.editReply({
-                            content: 'Semua field formulir harus diisi. Mohon lengkapi semua data.',
-                            flags: 64
-                        });
-                        return;
-                    }
-
-                    // Log the environment variable
-                    console.log('JODOH_CHANNEL_ID from env:', process.env.MATCHMAKING_CHANNEL_ID);
-
-                    // Get the matchmaking channel from environment variable
-                    const matchmakingChannelId = process.env.MATCHMAKING_CHANNEL_ID;
-
-                    // Check if channel ID is configured
-                    if (!matchmakingChannelId) {
-                        await interaction.editReply({
-                            content: 'Kanal cari jodoh belum dikonfigurasi. Silakan hubungi administrator.',
-                            flags: 64
-                        });
-                        return;
-                    }
-
-                    // Get the matchmaking channel
-                    const matchmakingChannel = client.channels.cache.get(matchmakingChannelId);
-
-                    // Log when bot finds the channel object
-                    console.log('Matchmaking channel object found:', matchmakingChannel ? 'YES' : 'NO');
-
-                    // Check if channel exists
-                    if (!matchmakingChannel) {
-                        await interaction.editReply({
-                            content: 'Kanal cari jodoh tidak ditemukan. Silakan hubungi administrator.',
-                            flags: 64
-                        });
-                        return;
-                    }
-
-                    // Create embed with Output Estetik
-                    const profileEmbed = new EmbedBuilder()
-                        .setTitle('📜 Identitas Singkat')
-                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-                        .setColor('#811331')
-                        .addFields(
-                            { name: '👤 Nama', value: nama, inline: false },
-                            { name: '🎂 Usia', value: umur, inline: true },
-                            { name: '♂️/♀️ Gender', value: gender, inline: true },
-                            { name: '✨ Tentang Diriku', value: hobi, inline: false },
-                            { name: '🎯 Mencari Sosok...', value: tipe, inline: false }
-                        )
-                        .setFooter({ text: 'Yang tertarik bisa langsung DM ya!' })
-                        .setTimestamp();
-
-                    // Create buttons - "Isi Form Cari Jodoh" and "Chat Me"
-                    const jodohButton = new ButtonBuilder()
-                        .setLabel('Isi Form Cari Jodoh')
-                        .setEmoji('💌')
-                        .setStyle(ButtonStyle.Primary)
-                        .setCustomId('btn_cari_jodoh');
-
-                    const chatMeButton = new ButtonBuilder()
-                        .setLabel('Chat Me')
-                        .setEmoji('💬')
-                        .setStyle(ButtonStyle.Secondary)
-                        .setCustomId(`btn_chat_me_${interaction.user.id}`); // Custom ID with user ID
-
-                    const row = new ActionRowBuilder()
-                        .addComponents(jodohButton, chatMeButton);
-
-                    // Send the profile to the matchmaking channel
-                    try {
-                        await matchmakingChannel.send({
-                            content: `✨ Ada formulir cari jodoh baru! <@${interaction.user.id}>`,
-                            embeds: [profileEmbed],
-                            components: [row]
-                        });
-                    } catch (sendError) {
-                        // Error Handling Ketat: Show complete error details
-                        console.error('Complete error details when sending to channel:', {
-                            message: sendError.message,
-                            stack: sendError.stack,
-                            code: sendError.code,
-                            name: sendError.name,
-                            status: sendError.status,
-                            method: sendError.method,
-                            path: sendError.path
-                        });
-
-                        await interaction.editReply({
-                            content: `Terjadi kesalahan saat mengirim profil ke kanal: ${sendError.message}`,
-                            flags: 64
-                        });
-                        return;
-                    }
-
-                    // Final Response: Success confirmation to user
-                    await interaction.editReply({
-                        content: 'Profil kamu telah berhasil dikirim! Orang-orang bisa melihat profil kamu sekarang.',
-                        flags: 64
-                    });
-                } catch (error) {
-                    // Error Handling Ketat: Show complete error details
-                    console.error('Complete error details in matchmaking form processing:', {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name,
-                        code: error.code
-                    });
-
-                    try {
-                        await interaction.editReply({
-                            content: `Terjadi kesalahan saat mengirim profil kamu: ${error.message}`,
-                            flags: 64
-                        });
-                    } catch (editError) {
-                        console.error('Failed to send error message to user:', editError);
-                    }
-                }
-            }
-            // Handle Chat Me modal submission
-            else if (interaction.customId.startsWith('modal_chat_me_')) {
-                try {
-                    await interaction.deferReply({ flags: 64 });
-
-                    const targetUserId = interaction.customId.split('_')[3]; // Extract target user ID
-                    const messageContent = interaction.fields.getTextInputValue('chat_me_message');
-
-                    // Get the target user
-                    const targetUser = await client.users.fetch(targetUserId);
-                    if (!targetUser) {
-                        await interaction.editReply({
-                            content: 'Pengguna yang dituju tidak ditemukan.',
-                            flags: 64
-                        });
-                        return;
-                    }
-
-                    // Create embed for the message
-                    const messageEmbed = new EmbedBuilder()
-                        .setTitle('💌 Pesan Perkenalan Baru')
-                        .setDescription(messageContent)
-                        .setColor('#811331')
-                        .setAuthor({ name: `${interaction.user.username}#${interaction.user.discriminator}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
-                        .setTimestamp();
-
-                    try {
-                        // Send DM to the target user
-                        await targetUser.send({
-                            embeds: [messageEmbed],
-                            content: `💬 Kamu menerima pesan perkenalan dari <@${interaction.user.id}>!`
-                        });
-
-                        // Confirm to the sender
-                        await interaction.editReply({
-                            content: `Pesanmu telah dikirim ke <@${targetUser.id}>!`,
-                            flags: 64
-                        });
-                    } catch (dmError) {
-                        console.error('Error sending DM:', dmError);
-                        await interaction.editReply({
-                            content: 'Gagal mengirim pesan. Mungkin pengguna menonaktifkan pesan pribadi.',
-                            flags: 64
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error in chat me modal submission:', error);
-                    try {
-                        await interaction.editReply({
-                            content: 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
-                            flags: 64
-                        });
-                    } catch (editError) {
-                        console.error('Failed to send error message:', editError);
-                    }
-                }
-            }
-            // Handle Feedback modal submission (for the feedback button)
-            else if (interaction.customId === 'modal_saran_user') {
-                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
-
-                const kategori = interaction.fields.getTextInputValue('kategori_saran');
-                const pesan = interaction.fields.getTextInputValue('pesan_saran');
-
-                // Ambil channel khusus admin untuk menerima laporan ini
-                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📒 Lembar Aspirasi')
-                    .setColor('#811331')
-                    .addFields(
-                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
-                        { name: '📂 Kategori', value: kategori, inline: true },
-                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
-                    )
-                    .setTimestamp();
-
-                // Check if log channel exists and bot has permissions
-                if (logChannel) {
-                    try {
-                        // Check if bot has permissions to send messages in the channel
-                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
-
-                        if (!botPermissions?.has('SendMessages')) {
-                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
-                            // Still send success message to user but log the error
-                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-                            return;
-                        }
-
-                        if (!botPermissions?.has('ViewChannel')) {
-                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
-                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-                            return;
-                        }
-
-                        if (!botPermissions?.has('EmbedLinks')) {
-                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
-                            // Send without embed if no embed permission
-                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
-                        } else {
-                            await logChannel.send({ embeds: [logEmbed] });
-                        }
-                    } catch (channelError) {
-                        console.error('Error sending feedback to log channel:', channelError);
-                        // Still send success message to user even if log channel fails
-                    }
-                } else {
-                    console.log('Feedback log channel not found or not configured');
-                }
-
-                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-            }
-            // Handle Feedback modal submission (for the feedback button from message)
-            else if (interaction.customId === 'modal_saran_user_from_msg') {
-                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
-
-                const kategori = interaction.fields.getTextInputValue('kategori_saran_from_msg');
-                const pesan = interaction.fields.getTextInputValue('pesan_saran_from_msg');
-
-                // Ambil channel khusus admin untuk menerima laporan ini
-                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📒 Lembar Aspirasi')
-                    .setColor('#811331')
-                    .addFields(
-                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
-                        { name: '📂 Kategori', value: kategori, inline: true },
-                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
-                    )
-                    .setTimestamp();
-
-                // Check if log channel exists and bot has permissions
-                if (logChannel) {
-                    try {
-                        // Check if bot has permissions to send messages in the channel
-                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
-
-                        if (!botPermissions?.has('SendMessages')) {
-                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
-                            // Still send success message to user but log the error
-                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-                            return;
-                        }
-
-                        if (!botPermissions?.has('ViewChannel')) {
-                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
-                            await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-                            return;
-                        }
-
-                        if (!botPermissions?.has('EmbedLinks')) {
-                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
-                            // Send without embed if no embed permission
-                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
-                        } else {
-                            await logChannel.send({ embeds: [logEmbed] });
-                        }
-                    } catch (channelError) {
-                        console.error('Error sending feedback to log channel:', channelError);
-                        // Still send success message to user even if log channel fails
-                    }
-                } else {
-                    console.log('Feedback log channel not found or not configured');
-                }
-
-                await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-            }
+            return; // Stop processing other handlers for this interaction
         }
         // Handle any other modal submissions that weren't caught by specific handlers
         else if (interaction.isModalSubmit()) {
@@ -1354,7 +2156,7 @@ module.exports = async (client, interaction) => {
             }
         }
     }
-};
+}
 
 // Note: The message event listener should be in a separate file for better organization
 // This is just a reference to where the message event should be implemented

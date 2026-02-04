@@ -16,6 +16,27 @@ module.exports = {
         await interaction.deferReply({ ephemeral: true }); // Defer reply to extend response time
 
         try {
+            // Get the target channel from environment variable
+            const targetChannelId = process.env.SUGGESTION_ENABLED_CHANNEL_ID;
+
+            if (!targetChannelId) {
+                await interaction.editReply({
+                    content: 'Target channel for suggestion panel has not been configured. Please set SUGGESTION_ENABLED_CHANNEL_ID in the .env file.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            const targetChannel = interaction.client.channels.cache.get(targetChannelId);
+
+            if (!targetChannel) {
+                await interaction.editReply({
+                    content: `Target channel (ID: ${targetChannelId}) could not be found. Please verify the channel ID is correct.`,
+                    ephemeral: true
+                });
+                return;
+            }
+
             // Create the embed with saran description
             const embed = new EmbedBuilder()
                 .setTitle('📝 Kotak Aspirasi Mɣralune')
@@ -30,13 +51,16 @@ module.exports = {
                     .setStyle(ButtonStyle.Primary)
             );
 
-            // Send the message with button to the current channel
-            await interaction.channel.send({ embeds: [embed], components: [row] });
+            // Send the message with button to the target channel
+            await targetChannel.send({ embeds: [embed], components: [row] });
 
-            await interaction.editReply({ content: 'Dashboard Saran berhasil dikirim!', flags: 64 });
+            await interaction.editReply({
+                content: `Dashboard Saran berhasil dikirim ke ${targetChannel.toString()}!`,
+                ephemeral: true
+            });
         } catch (error) {
             console.error('Error in setup saran command:', error);
-            await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur dashboard saran.', flags: 64 });
+            await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur dashboard saran.', ephemeral: true });
         }
     },
 };

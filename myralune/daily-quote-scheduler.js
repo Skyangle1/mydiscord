@@ -76,7 +76,16 @@ class DailyQuoteScheduler {
             await channel.send({ embeds: [embed] });
             console.log('Daily love quote sent successfully!');
         } catch (error) {
-            console.error('Error sending daily quote:', error);
+            // Handle specific Discord API errors
+            if (error.code === 50013) { // Missing Permissions
+                console.error('Bot lacks permissions to send messages in the daily quote channel:', error.message);
+            } else if (error.code === 10003) { // Unknown Channel
+                console.error('Daily quote channel does not exist or is inaccessible:', error.message);
+            } else if (error.code === 50001) { // Missing Access
+                console.error('Bot lacks access to view the daily quote channel:', error.message);
+            } else {
+                console.error('Error sending daily quote:', error);
+            }
         }
     }
 }
