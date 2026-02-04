@@ -17,11 +17,11 @@ module.exports = {
 
         try {
             // Get the target channel from environment variable
-            const targetChannelId = process.env.SUGGESTION_ENABLED_CHANNEL_ID;
+            const targetChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
 
             if (!targetChannelId) {
                 await interaction.editReply({
-                    content: 'Target channel for suggestion panel has not been configured. Please set SUGGESTION_ENABLED_CHANNEL_ID in the .env file.',
+                    content: 'Target channel for suggestion panel has not been configured. Please set FEEDBACK_LOG_CHANNEL_ID in the .env file.',
                     ephemeral: true
                 });
                 return;

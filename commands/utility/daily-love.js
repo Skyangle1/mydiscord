@@ -35,7 +35,7 @@ module.exports = {
             const channel = interaction.client.channels.cache.get(dailyQuoteChannelId);
             if (channel) {
                 await interaction.reply({
-                    content: `Daily love quotes are configured to be sent to: ${channel.toString()} (ID: ${dailyQuoteChannelId}). The bot will send a love quote every day at 9:00 AM server time.`,
+                    content: `Daily love quotes are configured to be sent to: ${channel.toString()} (ID: ${dailyQuoteChannelId}). The bot will send a love quote every 30 seconds (currently in testing mode).`,
                     ephemeral: true
                 });
             } else {
