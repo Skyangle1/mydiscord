@@ -51,13 +51,28 @@ module.exports = {
                     .setStyle(ButtonStyle.Primary)
             );
 
-            // Send the message with button to the target channel
-            await targetChannel.send({ embeds: [embed], components: [row] });
+            // Try to find and edit the latest suggestion message from the bot in the channel
+            const messages = await targetChannel.messages.fetch({ limit: 20 });
+            const latestSaranMessage = messages.find(msg => msg.author.id === interaction.client.user.id &&
+                msg.embeds.length > 0 &&
+                msg.embeds[0].title &&
+                (msg.embeds[0].title.includes('Kotak Aspirasi') || msg.embeds[0].title.includes('Saran')));
 
-            await interaction.editReply({
-                content: `Dashboard Saran berhasil dikirim ke ${targetChannel.toString()}!`,
-                ephemeral: true
-            });
+            if (latestSaranMessage) {
+                // Edit the existing message with updated content
+                await latestSaranMessage.edit({ embeds: [embed], components: [row] });
+                await interaction.editReply({
+                    content: `Dashboard Saran berhasil diperbarui di ${targetChannel.toString()}! (Memperbarui pesan sebelumnya)`,
+                    ephemeral: true
+                });
+            } else {
+                // If no existing message found, send a new one at the top
+                await targetChannel.send({ embeds: [embed], components: [row] });
+                await interaction.editReply({
+                    content: `Dashboard Saran berhasil dikirim ke ${targetChannel.toString()}!`,
+                    ephemeral: true
+                });
+            }
         } catch (error) {
             console.error('Error in setup saran command:', error);
             await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur dashboard saran.', ephemeral: true });

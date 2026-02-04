@@ -17,8 +17,8 @@ class DailyQuoteScheduler {
     }
 
     start() {
-        // Schedule the task to run every 30 seconds for testing purposes
-        this.task = cron.schedule('*/30 * * * * *', () => {
+        // Schedule the task to run every day at 7:00 AM WIB (UTC+7)
+        this.task = cron.schedule('0 7 * * *', () => {
             this.sendDailyQuote();
         }, {
             scheduled: false // We'll start it after checking if it should run
@@ -33,7 +33,7 @@ class DailyQuoteScheduler {
 
         if (dailyQuoteChannelId && dailyQuoteChannelId !== 'your_daily_quote_channel_id_here') {
             this.task.start();
-            console.log(`Daily quote scheduler started for channel ${dailyQuoteChannelId}. Running every 30 seconds for testing.`);
+            console.log(`Daily quote scheduler started for channel ${dailyQuoteChannelId}. Running every day at 7:00 AM WIB.`);
         } else {
             console.log('Daily quote channel not configured in .env file, scheduler not started.');
         }

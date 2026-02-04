@@ -1090,12 +1090,66 @@ module.exports = async (client, interaction) => {
                             console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
                             // Still send success message to user but log the error
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
                             return;
                         }
 
                         if (!botPermissions?.has('ViewChannel')) {
                             console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
                             return;
                         }
 
@@ -1115,6 +1169,33 @@ module.exports = async (client, interaction) => {
                 }
 
                 await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
             }
             // Handle Feedback modal submission (for the feedback button from message)
             else if (interaction.customId && interaction.customId === 'modal_saran_user_from_msg') {
@@ -1146,12 +1227,66 @@ module.exports = async (client, interaction) => {
                             console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
                             // Still send success message to user but log the error
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
                             return;
                         }
 
                         if (!botPermissions?.has('ViewChannel')) {
                             console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
                             return;
                         }
 
@@ -1171,6 +1306,33 @@ module.exports = async (client, interaction) => {
                 }
 
                 await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+
+                // Send the suggestion panel message after the user submits feedback to keep it accessible
+                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                if (targetChannel) {
+                    try {
+                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                        // Create the embed with saran description
+                        const embed = new EmbedBuilder()
+                            .setTitle('📝 Kotak Aspirasi Mɣralune')
+                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                            .setColor('#811331')
+                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('btn_open_saran') // ID Tombol
+                                .setLabel('Beri Masukan ✨')
+                                .setStyle(ButtonStyle.Primary)
+                        );
+
+                        // Send the message with button to the target channel
+                        await targetChannel.send({ embeds: [embed], components: [row] });
+                    } catch (error) {
+                        console.error('Error sending suggestion panel after feedback submission:', error);
+                    }
+                }
             }
             // Handle modal submission for new letter - UPDATED IMPLEMENTATION
             else if (interaction.customId && interaction.customId === 'modal_letter_submit') {

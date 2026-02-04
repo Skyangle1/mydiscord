@@ -6,39 +6,50 @@ class GeminiService {
             throw new Error('Google Gemini API key is required');
         }
         this.apiKey = apiKey;
-        this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
     }
 
     async getDailyLoveQuote() {
-        // Create a random category to diversify the types of quotes
-        const categories = [
-            "romantic love",
-            "deep emotional connection",
-            "passionate love",
-            "gentle and tender affection",
-            "eternal love",
-            "soulmate connection",
-            "unconditional love",
-            "heartfelt emotions",
-            "devotion and commitment",
-            "affectionate feelings"
+        // Daftar mood acak
+        const daftarMood = [
+            "puitis",
+            "ceria",
+            "sedikit misterius",
+            "penuh dukungan",
+            "santai/gaul",
+            "romantis mendalam",
+            "reflektif",
+            "hangat dan lembut",
+            "penuh harapan",
+            "menghibur"
         ];
+        const moodHariIni = daftarMood[Math.floor(Math.random() * daftarMood.length)];
 
-        const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-
-        // Create a random style to diversify the format
-        const styles = [
-            "quote",
-            "poem",
-            "short verse",
-            "profound saying",
-            "heartfelt message",
-            "romantic thought"
+        // Create a random metaphor to diversify the imagery
+        const metaphors = [
+            "senja",
+            "secangkir kopi",
+            "binatang bintang",
+            "rintik hujan",
+            "cahaya bulan",
+            "angin malam",
+            "tanaman yang tumbuh",
+            "melodi yang tak terdengar",
+            "bayangan di dinding",
+            "kilau embun pagi"
         ];
+        const randomMetaphor = metaphors[Math.floor(Math.random() * metaphors.length)];
 
-        const randomStyle = styles[Math.floor(Math.random() * styles.length)];
-
-        const prompt = `Generate a unique, beautiful, and original ${randomCategory} ${randomStyle} that would be perfect for a daily love message. Make it heartfelt and inspiring, but different from typical love quotes. Use creative and diverse expressions. Respond with only the ${randomStyle}, nothing else.`;
+        // Define the identity and role for Gemini
+        const prompt = `Kamu adalah 'Sang Pembisik Rindu', seorang penyair modern yang kreatif.
+        Tugasmu: Tulis surat cinta/puisi motivasi anonim yang indah.
+        Aturan:
+        - Gunakan bahasa yang hangat, puitis, tapi tidak alay.
+        - JANGAN gunakan kata-kata yang sering diulang (klise).
+        - Gunakan variasi metafora termasuk '${randomMetaphor}'.
+        - Buat suasana hati: ${moodHariIni}
+        - Pastikan setiap balasan selalu BERBEDA meskipun topiknya sama.
+        Tulis dalam bentuk puisi pendek atau kutipan yang penuh makna. Respon hanya dengan puisi/kutipan tersebut, tanpa komentar tambahan.`;
 
         try {
             const response = await axios.post(this.baseUrl, {
