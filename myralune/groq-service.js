@@ -1,12 +1,14 @@
-const axios = require('axios');
+const OpenAI = require('openai');
 
-class GeminiService {
+class GroqService {
     constructor(apiKey) {
         if (!apiKey) {
-            throw new Error('Google Gemini API key is required');
+            throw new Error('Groq API key is required');
         }
-        this.apiKey = apiKey;
-        this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        this.client = new OpenAI({
+            baseURL: "https://api.groq.com/openai/v1",
+            apiKey: apiKey,
+        });
     }
 
     async getDailyLoveQuote() {
@@ -40,7 +42,7 @@ class GeminiService {
         ];
         const randomMetaphor = metaphors[Math.floor(Math.random() * metaphors.length)];
 
-        // Define the identity and role for Gemini
+        // Define the identity and role for Groq
         const prompt = `Kamu adalah 'Sang Pembisik Rindu', seorang penyair modern yang kreatif.
         Tugasmu: Tulis surat cinta/puisi motivasi anonim yang indah.
         Aturan:
@@ -52,24 +54,23 @@ class GeminiService {
         Tulis dalam bentuk puisi pendek atau kutipan yang penuh makna. Respon hanya dengan puisi/kutipan tersebut, tanpa komentar tambahan.`;
 
         try {
-            const response = await axios.post(this.baseUrl, {
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }]
-            }, {
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000 // 10 second timeout
+            const response = await this.client.chat.completions.create({
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                model: "llama-3.1-8b-instant", // Model Groq yang ringan dan stabil
+                temperature: 0.8, // Agar hasil lebih kreatif dan bervariasi
+                max_tokens: 200, // Batasi panjang respons
             });
 
-            if (response.data.candidates && response.data.candidates.length > 0) {
-                const quote = response.data.candidates[0].content.parts[0].text.trim();
+            if (response.choices && response.choices.length > 0) {
+                const quote = response.choices[0].message.content.trim();
                 return quote;
             } else {
-                console.warn('No candidates returned from Gemini API');
+                console.warn('No choices returned from Groq API');
                 // Return a random fallback quote
                 const fallbackQuotes = [
                     `"Every moment with you is a blessing." - Anonymous`,
@@ -86,20 +87,20 @@ class GeminiService {
                 return fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)];
             }
         } catch (error) {
-            console.error('Error getting quote from Gemini:', error.message);
+            console.error('Error getting quote from Groq:', error.message);
 
             // Handle specific error types
-            if (error.response) {
-                console.error(`Gemini API Error: ${error.response.status} - ${error.response.statusText}`);
-                if (error.response.status === 404) {
-                    console.error('Model not found. Please check if gemini-1.5-flash is available in your region.');
-                } else if (error.response.status === 400) {
-                    console.error('Bad request to Gemini API. Check your prompt or API key.');
-                } else if (error.response.status === 403) {
+            if (error.status) {
+                console.error(`Groq API Error: ${error.status} - ${error.message}`);
+                if (error.status === 401) {
+                    console.error('Invalid API key. Please check your Groq API key.');
+                } else if (error.status === 403) {
                     console.error('Access forbidden. Check your API key permissions.');
+                } else if (error.status === 429) {
+                    console.error('Rate limit exceeded. Too many requests.');
                 }
-            } else if (error.request) {
-                console.error('No response received from Gemini API. Network issue?');
+            } else if (error.code === 'ECONNABORTED') {
+                console.error('Request timed out. Network issue?');
             }
 
             // Return a random fallback quote if API fails
@@ -120,4 +121,4 @@ class GeminiService {
     }
 }
 
-module.exports = GeminiService;
+module.exports = GroqService;

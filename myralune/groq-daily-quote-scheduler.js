@@ -1,16 +1,23 @@
 const cron = require('node-cron');
-const GeminiService = require('./gemini-service');
+const GroqService = require('./groq-service');
 require('dotenv').config();
 
-class DailyQuoteScheduler {
+class GroqDailyQuoteScheduler {
     constructor(client) {
         this.client = client;
 
-        try {
-            this.geminiService = new GeminiService(process.env.GEMINI_API_KEY);
-        } catch (error) {
-            console.error('Error initializing Gemini service:', error.message);
-            this.geminiService = null;
+        // Inisialisasi Groq service
+        const groqApiKey = process.env.GROQ_API_KEY;
+        if (!groqApiKey) {
+            console.log('Groq API key not configured in .env file');
+            this.groqService = null;
+        } else {
+            try {
+                this.groqService = new GroqService(groqApiKey);
+            } catch (error) {
+                console.error('Error initializing Groq service:', error.message);
+                this.groqService = null;
+            }
         }
 
         this.task = null;
@@ -18,8 +25,8 @@ class DailyQuoteScheduler {
     }
 
     start() {
-        // Schedule the task to run every day at 7:00 AM WIB (UTC+7)
-        this.task = cron.schedule('0 7 * * *', () => {
+        // Schedule the task to run twice daily (every 12 hours) - at 7:00 AM and 7:00 PM WIB (UTC+7)
+        this.task = cron.schedule('0 7,19 * * *', () => {
             this.sendDailyQuote();
         }, {
             scheduled: false // We'll start it after checking if it should run
@@ -41,7 +48,7 @@ class DailyQuoteScheduler {
 
         if (dailyQuoteChannelId && dailyQuoteChannelId !== 'your_daily_quote_channel_id_here') {
             this.task.start();
-            console.log(`Daily quote scheduler started for channel ${dailyQuoteChannelId}. Running every day at 7:00 AM WIB.`);
+            console.log(`Daily quote scheduler started for channel ${dailyQuoteChannelId}. Running twice daily at 7:00 AM and 7:00 PM WIB.`);
         } else {
             console.log('Daily quote channel not configured in .env file, scheduler not started.');
         }
@@ -64,14 +71,14 @@ class DailyQuoteScheduler {
             return;
         }
 
-        if (!this.geminiService) {
-            console.error('Gemini service not initialized, cannot send daily quote.');
+        if (!this.groqService) {
+            console.error('Groq service not initialized, cannot send daily quote.');
             return;
         }
 
         try {
-            // Get the quote from Gemini API
-            const quote = await this.geminiService.getDailyLoveQuote();
+            // Get the quote from Groq API
+            const quote = await this.groqService.getDailyLoveQuote();
 
             // Get the channel
             const channel = this.client.channels.cache.get(dailyQuoteChannelId);
@@ -88,7 +95,7 @@ class DailyQuoteScheduler {
                 .setDescription(`"${quote}"`)
                 .setColor('#FF69B4')
                 .setTimestamp()
-                .setFooter({ text: 'Powered by Google Gemini ❤️' });
+                .setFooter({ text: 'Powered by Groq AI ❤️' });
 
             await channel.send({ embeds: [embed] });
             console.log('Daily love quote sent successfully!');
@@ -147,4 +154,4 @@ class DailyQuoteScheduler {
     }
 }
 
-module.exports = DailyQuoteScheduler;
+module.exports = GroqDailyQuoteScheduler;

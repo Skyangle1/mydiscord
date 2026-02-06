@@ -1,36 +1,20 @@
-const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { updateBondedHousePanel } = require('../handlers/bondedHouseUtils');
 
-module.exports = {
-	name: Events.MessageCreate,
-	once: false,
-	async execute(message) {
-		// Ignore bot messages and system messages
-		if (message.author.bot) return;
+module.exports = async (client, message) => {
+    try {
+        // Check if message is in the bonded house channel
+        const bondedChannelId = process.env.BONDED_CHANNEL_ID;
+        if (!bondedChannelId) {
+            // If no bonded channel is configured, skip
+            return;
+        }
 
-		// Check if message is in a feedback-enabled channel
-		// You can customize this condition based on your needs
-		const feedbackEnabledChannelId = process.env.FEEDBACK_ENABLED_CHANNEL_ID;
-
-		if (feedbackEnabledChannelId && message.channel.id === feedbackEnabledChannelId) {
-			// Create a button for feedback
-			const feedbackButton = new ButtonBuilder()
-				.setCustomId('btn_open_saran_from_msg')
-				.setLabel('Berikan Masukan')
-				.setStyle(ButtonStyle.Secondary)
-				.setEmoji('💬');
-
-			const row = new ActionRowBuilder().addComponents(feedbackButton);
-
-			// Send a follow-up message with the feedback button
-			try {
-				await message.reply({
-					content: 'Ingin memberikan masukan tentang pesan ini?',
-					components: [row],
-					allowedMentions: { repliedUser: false }
-				});
-			} catch (error) {
-				console.error('Error sending feedback button message:', error);
-			}
-		}
-	},
+        if (message.channel.id === bondedChannelId && !message.author.bot) {
+            // If the message is in the bonded channel and not from a bot
+            // Update the bonded house panel to keep the button at the bottom
+            await updateBondedHousePanel(message.channel);
+        }
+    } catch (error) {
+        console.error('Error in messageCreate event for bonded house:', error);
+    }
 };

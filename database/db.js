@@ -14,9 +14,10 @@ db.serialize(() => {
     db.run("PRAGMA journal_mode = WAL;");
 });
 
-// Initialize the letters table
+// Initialize the tables
 function initializeDatabase() {
-    const createTableSQL = `
+    // Create letters table
+    const createLettersTableSQL = `
         CREATE TABLE IF NOT EXISTS letters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             original_message_id TEXT,
@@ -30,8 +31,18 @@ function initializeDatabase() {
         )
     `;
 
+    // Create families table
+    const createFamiliesTableSQL = `
+        CREATE TABLE IF NOT EXISTS families (
+            owner_id TEXT PRIMARY KEY,
+            family_name TEXT NOT NULL,
+            slogan TEXT
+        )
+    `;
+
     db.serialize(() => {
-        db.run(createTableSQL);
+        db.run(createLettersTableSQL);
+        db.run(createFamiliesTableSQL);
         console.log('Database initialized successfully');
     });
 }

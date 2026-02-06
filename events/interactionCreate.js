@@ -494,6 +494,51 @@ module.exports = async (client, interaction) => {
                     }
                 }
             }
+            // Handle Build Family button click
+            else if (interaction.customId === 'btn_build_family') {
+                try {
+                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                    // Create a modal
+                    const buildFamilyModal = new ModalBuilder()
+                        .setCustomId('modal_build_family')
+                        .setTitle('Bangun Keluargamu');
+
+                    // Input for family name (required)
+                    const familyNameInput = new TextInputBuilder()
+                        .setCustomId('family_name')
+                        .setLabel('Nama Keluarga')
+                        .setPlaceholder('Contoh: Keluarga Bahagia, Tim Hebat, dll')
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(25)
+                        .setRequired(true);
+
+                    // Input for family slogan (optional)
+                    const sloganInput = new TextInputBuilder()
+                        .setCustomId('family_slogan')
+                        .setLabel('Slogan Keluarga')
+                        .setPlaceholder('Slogan singkat keluargamu (opsional)')
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(100)
+                        .setRequired(false);
+
+                    // Add inputs to modal
+                    const firstActionRow = new ActionRowBuilder().addComponents(familyNameInput);
+                    const secondActionRow = new ActionRowBuilder().addComponents(sloganInput);
+
+                    buildFamilyModal.addComponents(firstActionRow, secondActionRow);
+
+                    await interaction.showModal(buildFamilyModal);
+                } catch (modalError) {
+                    console.error('Error showing build family modal:', modalError);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form pembuatan keluarga. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
             // Handle Open Feedback button click from message
             else if (interaction.customId === 'btn_open_saran_from_msg') {
                 try {
@@ -2924,6 +2969,198 @@ module.exports = async (client, interaction) => {
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
                         content: '❌ There was an error submitting your feedback. Please try again later.',
+                        flags: 64
+                    });
+                }
+            }
+        }
+        // Handle Build Family modal submission
+        else if (interaction.customId === 'modal_build_family') {
+            await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+            try {
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Get values from modal
+                const familyName = interaction.fields.getTextInputValue('family_name');
+                const familySlogan = interaction.fields.getTextInputValue('family_slogan') || 'Tidak ada slogan';
+
+                // Check if user has any of the required roles from environment variable
+                const requiredRoleIds = process.env.BONDED_ROLE_REQUIREMENT;
+                if (!requiredRoleIds) {
+                    await interaction.editReply({
+                        content: 'Role requirement for bonded house has not been configured yet. Please contact administrator.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                const member = interaction.member;
+
+                // Split the required role IDs by comma and trim spaces
+                const requiredRoleIdArray = requiredRoleIds.split(',').map(id => id.trim());
+
+                // Check if user has any of the required roles
+                const hasRole = requiredRoleIdArray.some(roleId => member.roles.cache.has(roleId));
+
+                // Debug logging
+                console.log('DEBUG - Required Role IDs:', requiredRoleIdArray);
+                console.log('DEBUG - User Roles:', member.roles.cache.map(role => `${role.name} (${role.id})`));
+                console.log('DEBUG - Has Required Role:', hasRole);
+
+                if (!hasRole) {
+                    await interaction.editReply({
+                        content: 'Hanya pemegang role khusus yang bisa membangun keluarga!',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Check if user already has a family in the database
+                // Use the same database connection that was imported earlier
+                const dbConnection = db; // Use the already imported db connection
+
+                // Debug logging
+                console.log('DEBUG - Checking existing family for user:', interaction.user.id);
+
+                // Prepare and execute query
+                const stmt = dbConnection.prepare('SELECT * FROM families WHERE owner_id = ?');
+                let existingFamily;
+                try {
+                    existingFamily = stmt.get(interaction.user.id);
+                } catch (error) {
+                    console.error('Error executing database query:', error);
+                    existingFamily = null;
+                }
+
+                console.log('DEBUG - Query result:', existingFamily);
+                console.log('DEBUG - Type of result:', typeof existingFamily);
+
+                // Check if existingFamily is actually a result object (not null/undefined)
+                // If query returns a row, existingFamily will be an object with the row data
+                // If query returns no rows, existingFamily will be undefined
+                if (existingFamily !== undefined && existingFamily !== null) {
+                    console.log('DEBUG - Family data:', existingFamily);
+                    await interaction.editReply({
+                        content: 'Kamu sudah memiliki keluarga!',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // [PENGECEKAN PEMBAYARAN] - Tempatkan logika pengecekan pembayaran di sini
+                // Contoh:
+                // if (!await checkPaymentStatus(interaction.user.id)) {
+                //     await interaction.editReply({
+                //         content: 'Pembayaran belum dilakukan. Silakan lakukan pembayaran terlebih dahulu.',
+                //         flags: 64
+                //     });
+                //     return;
+                // }
+
+                // Insert family data into the database
+                try {
+                    db.prepare('INSERT INTO families (owner_id, family_name, slogan) VALUES (?, ?, ?)').run(
+                        interaction.user.id,
+                        familyName,
+                        familySlogan
+                    );
+                } catch (insertError) {
+                    if (insertError.errno === 19) { // SQLITE_CONSTRAINT error code
+                        await interaction.editReply({
+                            content: 'Kamu sudah memiliki keluarga!',
+                            flags: 64
+                        });
+                        return;
+                    } else {
+                        console.error('Database error inserting family:', insertError);
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat membuat keluarga. Silakan coba lagi.',
+                            flags: 64
+                        });
+                        return;
+                    }
+                }
+
+                // Create a new role with the family name
+                const guild = interaction.guild;
+
+                // Check if bot has permission to manage roles
+                if (!guild.members.me.permissions.has('ManageRoles')) {
+                    await interaction.editReply({
+                        content: 'Bot tidak memiliki izin untuk mengelola role. Mohon berikan izin "Manage Roles" ke bot.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                const newRole = await guild.roles.create({
+                    name: familyName,
+                    color: '#FF69B4', // Pink color for family roles
+                    reason: `Created for family ${familyName} by ${interaction.user.tag}`
+                });
+
+                // Add the new role to the user who created the family
+                await member.roles.add(newRole);
+
+                // Send notification to admin channel instead of creating a family channel
+                const adminChannelId = process.env.ADMIN_NOTIFICATION_CHANNEL_ID || process.env.STAFF_CHANNEL_ID;
+                if (adminChannelId) {
+                    const adminChannel = guild.channels.cache.get(adminChannelId);
+                    if (adminChannel) {
+                        const notificationEmbed = new EmbedBuilder()
+                            .setTitle('🏠 Keluarga Baru Dibuat')
+                            .setDescription(`Sebuah keluarga baru telah dibuat di server ini`)
+                            .addFields(
+                                { name: '>Nama Keluarga', value: familyName, inline: true },
+                                { name: 'Slogan', value: familySlogan, inline: true },
+                                { name: 'Pembuat', value: `${interaction.user.tag} (ID: ${interaction.user.id})`, inline: true }
+                            )
+                            .setColor('#FF69B4')
+                            .setTimestamp();
+
+                        await adminChannel.send({ embeds: [notificationEmbed] });
+                    }
+                }
+
+                // Create success embed
+                const successEmbed = new EmbedBuilder()
+                    .setTitle('🏠 Keluarga Berhasil Dibangun!')
+                    .setDescription(`**${familyName}** telah resmi dibangun!\n\n**Slogan:** ${familySlogan}\n\nRole dan channel khusus telah dibuat untuk keluargamu.`)
+                    .setColor('#FF69B4')
+                    .addFields(
+                        { name: 'Nama Keluarga', value: familyName, inline: true },
+                        { name: 'Slogan', value: familySlogan, inline: true },
+                        { name: 'Anggota Keluarga', value: `<@${interaction.user.id}>`, inline: true }
+                    )
+                    .setTimestamp();
+
+                // Send success message to the bonded channel
+                const bondedChannelId = process.env.BONDED_CHANNEL_ID;
+                if (bondedChannelId) {
+                    const bondedChannel = interaction.client.channels.cache.get(bondedChannelId);
+                    if (bondedChannel) {
+                        await bondedChannel.send({ embeds: [successEmbed] });
+                    }
+                }
+
+                // Confirm to the user
+                await interaction.editReply({
+                    content: `Keluargamu "${familyName}" telah berhasil dibangun! Role dan channel khusus telah dibuat.`,
+                    flags: 64
+                });
+            } catch (error) {
+                console.error('Error processing build family modal:', error);
+
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: '❌ Terjadi kesalahan saat membuat keluargamu. Silakan coba lagi nanti.',
+                        flags: 64
+                    });
+                } else {
+                    await interaction.editReply({
+                        content: '❌ Terjadi kesalahan saat membuat keluargamu. Silakan coba lagi nanti.',
                         flags: 64
                     });
                 }
