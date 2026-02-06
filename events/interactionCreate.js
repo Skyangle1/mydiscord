@@ -33,25 +33,16 @@ module.exports = async (client, interaction) => {
 
                 // Try to send error message, but handle cases where interaction might already be responded to
                 try {
-                    if (interaction.replied || interaction.deferred) {
-                        // If already replied or deferred, use followUp or editReply
-                        if (interaction.deferred) {
-                            await interaction.editReply({
-                                content: 'There was an error while executing this command!',
-                                ephemeral: true
-                            });
-                        } else {
-                            await interaction.followUp({
-                                content: 'There was an error while executing this command!',
-                                ephemeral: true
-                            });
-                        }
-                    } else {
-                        // If not yet replied, use reply
+                    if (!interaction.replied && !interaction.deferred) {
+                        // If not yet replied, use reply with flags
                         await interaction.reply({
                             content: 'There was an error while executing this command!',
                             ephemeral: true
                         });
+                    } else {
+                        // If already replied or deferred, we can't send another reply
+                        // Just log the error, as we can't respond to the user anymore
+                        console.error('Could not send error message - interaction already acknowledged');
                     }
                 } catch (replyError) {
                     console.error('Failed to send error message:', replyError);
@@ -257,10 +248,12 @@ module.exports = async (client, interaction) => {
                     await interaction.showModal(modal);
                 } catch (modalError) {
                     console.error('Error showing chat me modal:', modalError);
-                    await interaction.reply({
-                        content: 'Terjadi kesalahan saat membuka form pesan. Silakan coba lagi.',
-                        ephemeral: true
-                    });
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form pesan. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
                 }
             }
             // Handle Open Feedback button click
@@ -292,10 +285,79 @@ module.exports = async (client, interaction) => {
                     await interaction.showModal(modal);
                 } catch (modalError) {
                     console.error('Error showing saran modal:', modalError);
-                    await interaction.reply({
-                        content: 'Terjadi kesalahan saat membuka form saran. Silakan coba lagi.',
-                        ephemeral: true
-                    });
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form saran. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+            // Handle Open Feedback button click
+            else if (interaction.customId === 'btn_open_feedback') {
+                try {
+                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                    // Create a modal
+                    const feedbackModal = new ModalBuilder()
+                        .setCustomId('feedbackModal')
+                        .setTitle('Feedback Form');
+
+                    // Add star rating input (required)
+                    const starRatingInput = new TextInputBuilder()
+                        .setCustomId('starRating')
+                        .setLabel('Rate your experience (1-5 stars)')
+                        .setPlaceholder('Enter a number from 1 to 5')
+                        .setStyle(TextInputStyle.Short)
+                        .setMinLength(1)
+                        .setMaxLength(1)
+                        .setRequired(true);
+
+                    // Add feedback title input (optional)
+                    const feedbackTitleInput = new TextInputBuilder()
+                        .setCustomId('feedbackTitle')
+                        .setLabel('Feedback Title')
+                        .setPlaceholder('Briefly summarize your feedback (optional)')
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(100)
+                        .setRequired(false);
+
+                    // Add detailed feedback input (optional)
+                    const feedbackDetailInput = new TextInputBuilder()
+                        .setCustomId('feedbackDetail')
+                        .setLabel('Detailed Feedback')
+                        .setPlaceholder('Please provide detailed feedback... (optional)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setMaxLength(4000)
+                        .setRequired(false);
+
+                    // Add feedback type selection (optional)
+                    const feedbackTypeInput = new TextInputBuilder()
+                        .setCustomId('feedbackType')
+                        .setLabel('Feedback Type')
+                        .setPlaceholder('Bug Report, Feature Request, or General Comment (optional)')
+                        .setStyle(TextInputStyle.Short)
+                        .setMaxLength(50)
+                        .setRequired(false);
+
+                    // Add action rows for inputs
+                    const firstActionRow = new ActionRowBuilder().addComponents(starRatingInput);
+                    const secondActionRow = new ActionRowBuilder().addComponents(feedbackTitleInput);
+                    const thirdActionRow = new ActionRowBuilder().addComponents(feedbackDetailInput);
+                    const fourthActionRow = new ActionRowBuilder().addComponents(feedbackTypeInput);
+
+                    feedbackModal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow);
+
+                    // Show the modal to the user
+                    await interaction.showModal(feedbackModal);
+                } catch (modalError) {
+                    console.error('Error showing feedback modal:', modalError);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form feedback. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
                 }
             }
             // Handle Open Feedback button click from message
@@ -327,10 +389,12 @@ module.exports = async (client, interaction) => {
                     await interaction.showModal(modal);
                 } catch (modalError) {
                     console.error('Error showing saran modal from message:', modalError);
-                    await interaction.reply({
-                        content: 'Terjadi kesalahan saat membuka form saran. Silakan coba lagi.',
-                        ephemeral: true
-                    });
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form saran. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
                 }
             }
             // Reply modal handlers have been moved to the correct modal submission section
@@ -1067,135 +1131,122 @@ module.exports = async (client, interaction) => {
                 const kategori = interaction.fields.getTextInputValue('kategori_saran');
                 const pesan = interaction.fields.getTextInputValue('pesan_saran');
 
-                // Ambil channel khusus admin untuk menerima laporan ini
-                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                // Gunakan saluran saran utama, fallback ke log channel jika tidak ditemukan
+                let saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_CHANNEL_ID);
+                if (!saranChannel) {
+                    saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_LOG_CHANNEL_ID);
+                }
 
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📒 Lembar Aspirasi')
+                // Ambil role staff untuk ditag
+                const staffRole = interaction.guild.roles.cache.get(process.env.STAFF_ROLE_ID);
+
+                // Buat embed untuk menampilkan saran user
+                const userSuggestionEmbed = new EmbedBuilder()
+                    .setTitle('✨ Saran Baru Mɣralune')
                     .setColor('#811331')
                     .addFields(
-                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
+                        { name: '👤 Pengirim', value: `${interaction.user} (${interaction.user.tag})`, inline: true },
                         { name: '📂 Kategori', value: kategori, inline: true },
-                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
+                        { name: '💬 Isi Saran', value: `\`\`\`${pesan}\`\`\`` }
                     )
                     .setTimestamp();
 
-                // Check if log channel exists and bot has permissions
-                if (logChannel) {
+                // Check if saran channel exists and bot has permissions
+                if (saranChannel) {
                     try {
                         // Check if bot has permissions to send messages in the channel
-                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
+                        const botPermissions = saranChannel.permissionsFor(interaction.client.user);
 
                         if (!botPermissions?.has('SendMessages')) {
-                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
-                            // Still send success message to user but log the error
+                            console.log('ERROR: Bot lacks SendMessages permission in saran channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
                             return;
                         }
 
                         if (!botPermissions?.has('ViewChannel')) {
-                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            console.log('ERROR: Bot lacks ViewChannel permission in saran channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
                             return;
                         }
 
                         if (!botPermissions?.has('EmbedLinks')) {
-                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            console.log('ERROR: Bot lacks EmbedLinks permission in saran channel');
                             // Send without embed if no embed permission
-                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                            const messageContent = staffRole ?
+                                `<@&${staffRole.id}>\n**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}` :
+                                `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
+
+                            await saranChannel.send(messageContent);
                         } else {
-                            await logChannel.send({ embeds: [logEmbed] });
+                            // Kirim pesan saran user dengan tag staff jika role tersedia
+                            const messageContent = staffRole ?
+                                { content: `<@&${staffRole.id}>`, embeds: [userSuggestionEmbed] } :
+                                { embeds: [userSuggestionEmbed] };
+                            await saranChannel.send(messageContent);
+                        }
+
+                        // STICKY BUTTON LOGIC: Find and delete the old button-only message, then send a new one to keep it at the bottom
+                        try {
+                            // Find the latest button-only message in the channel
+                            const messages = await saranChannel.messages.fetch({ limit: 20 });
+                            const buttonOnlyMessage = messages.find(msg =>
+                                msg.author.id === interaction.client.user.id &&
+                                msg.components.length > 0 && // Message has components (buttons)
+                                msg.embeds.length === 0 // Message has no embed, only buttons
+                            );
+
+                            // Delete the old button-only message if found
+                            if (buttonOnlyMessage) {
+                                await buttonOnlyMessage.delete();
+                            }
+
+                            // Send a new button-only message at the bottom
+                            const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                            const newRow = new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId('btn_open_saran') // ID Tombol
+                                    .setLabel('Ajukan Saran')
+                                    .setStyle(ButtonStyle.Primary)
+                                    .setEmoji('📝')
+                            );
+
+                            await saranChannel.send({ components: [newRow] });
+                        } catch (stickyError) {
+                            console.error('Error in sticky button logic:', stickyError);
+
+                            // If sticky button logic fails, send a new button-only message anyway
+                            try {
+                                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                                const fallbackRow = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId('btn_open_saran') // ID Tombol
+                                        .setLabel('Ajukan Saran')
+                                        .setStyle(ButtonStyle.Primary)
+                                        .setEmoji('📝')
+                                );
+
+                                await saranChannel.send({ components: [fallbackRow] });
+                            } catch (fallbackError) {
+                                console.error('Error in fallback sticky button logic:', fallbackError);
+                            }
                         }
                     } catch (channelError) {
-                        console.error('Error sending feedback to log channel:', channelError);
-                        // Still send success message to user even if log channel fails
+                        console.error('Error sending saran to channel:', channelError);
+                        // Still send success message to user even if channel fails
                     }
                 } else {
-                    console.log('Feedback log channel not found or not configured');
+                    console.log('Saran channel not found or not configured');
+                    // Jika tidak ada channel yang ditemukan, beri tahu user
+                    await interaction.editReply({
+                        content: 'Terjadi kesalahan: Channel saran tidak ditemukan. Hubungi administrator server.',
+                        flags: 64
+                    });
+                    return;
                 }
 
                 await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
             }
             // Handle Feedback modal submission (for the feedback button from message)
             else if (interaction.customId && interaction.customId === 'modal_saran_user_from_msg') {
@@ -1204,135 +1255,122 @@ module.exports = async (client, interaction) => {
                 const kategori = interaction.fields.getTextInputValue('kategori_saran_from_msg');
                 const pesan = interaction.fields.getTextInputValue('pesan_saran_from_msg');
 
-                // Ambil channel khusus admin untuk menerima laporan ini
-                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                // Gunakan saluran saran utama, fallback ke log channel jika tidak ditemukan
+                let saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_CHANNEL_ID);
+                if (!saranChannel) {
+                    saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_LOG_CHANNEL_ID);
+                }
 
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('📒 Lembar Aspirasi')
+                // Ambil role staff untuk ditag
+                const staffRole = interaction.guild.roles.cache.get(process.env.STAFF_ROLE_ID);
+
+                // Buat embed untuk menampilkan saran user
+                const userSuggestionEmbed = new EmbedBuilder()
+                    .setTitle('✨ Saran Baru Mɣralune')
                     .setColor('#811331')
                     .addFields(
-                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
+                        { name: '👤 Pengirim', value: `${interaction.user} (${interaction.user.tag})`, inline: true },
                         { name: '📂 Kategori', value: kategori, inline: true },
-                        { name: '💬 Pesan', value: `\`\`\`${pesan}\`\`\`` }
+                        { name: '💬 Isi Saran', value: `\`\`\`${pesan}\`\`\`` }
                     )
                     .setTimestamp();
 
-                // Check if log channel exists and bot has permissions
-                if (logChannel) {
+                // Check if saran channel exists and bot has permissions
+                if (saranChannel) {
                     try {
                         // Check if bot has permissions to send messages in the channel
-                        const botPermissions = logChannel.permissionsFor(interaction.client.user);
+                        const botPermissions = saranChannel.permissionsFor(interaction.client.user);
 
                         if (!botPermissions?.has('SendMessages')) {
-                            console.log('ERROR: Bot lacks SendMessages permission in feedback log channel');
-                            // Still send success message to user but log the error
+                            console.log('ERROR: Bot lacks SendMessages permission in saran channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
                             return;
                         }
 
                         if (!botPermissions?.has('ViewChannel')) {
-                            console.log('ERROR: Bot lacks ViewChannel permission in feedback log channel');
+                            console.log('ERROR: Bot lacks ViewChannel permission in saran channel');
                             await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
                             return;
                         }
 
                         if (!botPermissions?.has('EmbedLinks')) {
-                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback log channel');
+                            console.log('ERROR: Bot lacks EmbedLinks permission in saran channel');
                             // Send without embed if no embed permission
-                            await logChannel.send(`**Aspirasi Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`);
+                            const messageContent = staffRole ?
+                                `<@&${staffRole.id}>\n**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}` :
+                                `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
+
+                            await saranChannel.send(messageContent);
                         } else {
-                            await logChannel.send({ embeds: [logEmbed] });
+                            // Kirim pesan saran user dengan tag staff jika role tersedia
+                            const messageContent = staffRole ?
+                                { content: `<@&${staffRole.id}>`, embeds: [userSuggestionEmbed] } :
+                                { embeds: [userSuggestionEmbed] };
+                            await saranChannel.send(messageContent);
+                        }
+
+                        // STICKY BUTTON LOGIC: Find and delete the old button-only message, then send a new one to keep it at the bottom
+                        try {
+                            // Find the latest button-only message in the channel
+                            const messages = await saranChannel.messages.fetch({ limit: 20 });
+                            const buttonOnlyMessage = messages.find(msg =>
+                                msg.author.id === interaction.client.user.id &&
+                                msg.components.length > 0 && // Message has components (buttons)
+                                msg.embeds.length === 0 // Message has no embed, only buttons
+                            );
+
+                            // Delete the old button-only message if found
+                            if (buttonOnlyMessage) {
+                                await buttonOnlyMessage.delete();
+                            }
+
+                            // Send a new button-only message at the bottom
+                            const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                            const newRow = new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId('btn_open_saran') // ID Tombol
+                                    .setLabel('Ajukan Saran')
+                                    .setStyle(ButtonStyle.Primary)
+                                    .setEmoji('📝')
+                            );
+
+                            await saranChannel.send({ components: [newRow] });
+                        } catch (stickyError) {
+                            console.error('Error in sticky button logic:', stickyError);
+
+                            // If sticky button logic fails, send a new button-only message anyway
+                            try {
+                                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                                const fallbackRow = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId('btn_open_saran') // ID Tombol
+                                        .setLabel('Ajukan Saran')
+                                        .setStyle(ButtonStyle.Primary)
+                                        .setEmoji('📝')
+                                );
+
+                                await saranChannel.send({ components: [fallbackRow] });
+                            } catch (fallbackError) {
+                                console.error('Error in fallback sticky button logic:', fallbackError);
+                            }
                         }
                     } catch (channelError) {
-                        console.error('Error sending feedback to log channel:', channelError);
-                        // Still send success message to user even if log channel fails
+                        console.error('Error sending saran to channel:', channelError);
+                        // Still send success message to user even if channel fails
                     }
                 } else {
-                    console.log('Feedback log channel not found or not configured');
+                    console.log('Saran channel not found or not configured');
+                    // Jika tidak ada channel yang ditemukan, beri tahu user
+                    await interaction.editReply({
+                        content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨',
+                        flags: 64
+                    });
+                    return;
                 }
 
                 await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
-
-                // Send the suggestion panel message after the user submits feedback to keep it accessible
-                const targetChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                if (targetChannel) {
-                    try {
-                        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                        // Create the embed with saran description
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 Kotak Aspirasi Mɣralune')
-                            .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                            .setColor('#811331')
-                            .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('btn_open_saran') // ID Tombol
-                                .setLabel('Beri Masukan ✨')
-                                .setStyle(ButtonStyle.Primary)
-                        );
-
-                        // Send the message with button to the target channel
-                        await targetChannel.send({ embeds: [embed], components: [row] });
-                    } catch (error) {
-                        console.error('Error sending suggestion panel after feedback submission:', error);
-                    }
-                }
             }
             // Handle modal submission for new letter - UPDATED IMPLEMENTATION
             else if (interaction.customId && interaction.customId === 'modal_letter_submit') {
@@ -2286,6 +2324,190 @@ module.exports = async (client, interaction) => {
                 }
             return; // Stop processing other handlers for this interaction
         }
+        // Handle feedback modal submission
+        else if (interaction.customId === 'feedbackModal') {
+            try {
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+                // Get the values from the modal
+                const starRating = interaction.fields.getTextInputValue('starRating');
+                const feedbackTitle = interaction.fields.getTextInputValue('feedbackTitle');
+                const feedbackDetail = interaction.fields.getTextInputValue('feedbackDetail');
+                const feedbackType = interaction.fields.getTextInputValue('feedbackType');
+
+                // Validate star rating
+                const rating = parseInt(starRating);
+                if (isNaN(rating) || rating < 1 || rating > 5) {
+                    await interaction.editReply({
+                        content: '❌ Invalid star rating. Please enter a number between 1 and 5.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Create star rating display
+                const starDisplay = '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
+
+                // Use default values if optional fields are empty
+                const title = feedbackTitle.trim() || 'No title provided';
+                const detail = feedbackDetail.trim() || 'No details provided';
+                const type = feedbackType.trim() || 'General Feedback';
+
+                // Use feedback channel from environment variable, fallback to log channel if not found
+                let feedbackChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_CHANNEL_ID);
+                if (!feedbackChannel) {
+                    feedbackChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
+                }
+
+                // Get staff role for tagging
+                const staffRole = interaction.guild.roles.cache.get(process.env.STAFF_ROLE_ID);
+
+                // Create embed for feedback
+                const { EmbedBuilder } = require('discord.js');
+
+                const feedbackEmbed = new EmbedBuilder()
+                    .setColor(0x0099ff)
+                    .setTitle(`💬 Feedback Baru Mɣralune - ${type}`)
+                    .addFields(
+                        { name: 'Rating', value: `${starDisplay} (${rating}/5)`, inline: true },
+                        { name: 'Title', value: title, inline: true },
+                        { name: 'Details', value: detail },
+                        { name: 'Submitted by', value: `${interaction.user} (${interaction.user.tag})`, inline: true },
+                        { name: 'Date', value: new Date().toLocaleDateString(), inline: true }
+                    )
+                    .setTimestamp();
+
+                // Check if feedback channel exists and bot has permissions
+                if (feedbackChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = feedbackChannel.permissionsFor(interaction.client.user);
+
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in feedback channel');
+                            await interaction.editReply({ content: 'Terima kasih! Feedback-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in feedback channel');
+                            await interaction.editReply({ content: 'Terima kasih! Feedback-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in feedback channel');
+                            // Send without embed if no embed permission
+                            const messageContent = staffRole ?
+                                `<@&${staffRole.id}>\n**Feedback Baru!**\nPengirim: ${interaction.user.tag}\nRating: ${rating}/5\nTipe: ${type}\nJudul: ${title}\nDetail: ${detail}` :
+                                `**Feedback Baru!**\nPengirim: ${interaction.user.tag}\nRating: ${rating}/5\nTipe: ${type}\nJudul: ${title}\nDetail: ${detail}`;
+
+                            await feedbackChannel.send(messageContent);
+                        } else {
+                            // Send feedback with staff tag if role exists
+                            const messageContent = staffRole ?
+                                { content: `<@&${staffRole.id}>`, embeds: [feedbackEmbed] } :
+                                { embeds: [feedbackEmbed] };
+                            await feedbackChannel.send(messageContent);
+                        }
+
+                        // STICKY BUTTON LOGIC: Find and delete the old feedback button-only message, then send a new one to keep it at the bottom
+                        try {
+                            // Find the latest feedback button-only message in the channel
+                            const messages = await feedbackChannel.messages.fetch({ limit: 20 });
+                            const feedbackButtonMessage = messages.find(msg =>
+                                msg.author.id === interaction.client.user.id &&
+                                msg.components.length > 0 && // Message has components (buttons)
+                                msg.embeds.length === 0 // Message has no embed, only buttons
+                            );
+
+                            // Delete the old feedback button-only message if found
+                            if (feedbackButtonMessage) {
+                                await feedbackButtonMessage.delete();
+                            }
+
+                            // Send a new feedback button-only message at the bottom
+                            const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                            const newRow = new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId('btn_open_feedback') // ID Tombol
+                                    .setLabel('Kirim Feedback')
+                                    .setStyle(ButtonStyle.Primary)
+                                    .setEmoji('💬')
+                            );
+
+                            await feedbackChannel.send({ components: [newRow] });
+                        } catch (stickyError) {
+                            console.error('Error in feedback sticky button logic:', stickyError);
+
+                            // If sticky button logic fails, send a new button-only message anyway
+                            try {
+                                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                                const fallbackRow = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId('btn_open_feedback') // ID Tombol
+                                        .setLabel('Kirim Feedback')
+                                        .setStyle(ButtonStyle.Primary)
+                                        .setEmoji('💬')
+                                );
+
+                                await feedbackChannel.send({ components: [fallbackRow] });
+                            } catch (fallbackError) {
+                                console.error('Error in fallback feedback sticky button logic:', fallbackError);
+                            }
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending feedback to channel:', channelError);
+                        // Still send success message to user even if channel fails
+                    }
+                } else {
+                    console.log('Feedback channel not found or not configured');
+                    // If no specific channel is set, send to the same channel where command was used
+                    await interaction.channel.send({ embeds: [feedbackEmbed] });
+                }
+
+                // Reply to the user
+                await interaction.editReply({
+                    content: 'Terima kasih! Feedback-mu sudah terkirim ke tim Mɣralune. ✨',
+                    flags: 64
+                });
+
+                // Log feedback to a file for record keeping
+                const fs = require('fs');
+                const path = require('path');
+
+                const feedbackLog = {
+                    userId: interaction.user.id,
+                    userTag: interaction.user.tag,
+                    rating: rating,
+                    title: title,
+                    details: detail,
+                    type: type,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Create logs directory if it doesn't exist
+                const logsDir = path.join(__dirname, '../logs');
+                if (!fs.existsSync(logsDir)) {
+                    fs.mkdirSync(logsDir, { recursive: true });
+                }
+
+                // Append feedback to log file
+                const logFilePath = path.join(logsDir, 'feedback.log');
+                fs.appendFileSync(logFilePath, JSON.stringify(feedbackLog) + '\n');
+
+            } catch (error) {
+                console.error('Error processing feedback modal:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: '❌ There was an error submitting your feedback. Please try again later.',
+                        flags: 64
+                    });
+                }
+            }
+        }
         // Handle any other modal submissions that weren't caught by specific handlers
         else if (interaction.isModalSubmit()) {
             console.log('Unrecognized modal submission received:', interaction.customId);
@@ -2304,19 +2526,15 @@ module.exports = async (client, interaction) => {
         console.error('Unhandled interaction error:', error);
 
         // Try to respond to the interaction if possible
-        if (interaction.replied || interaction.deferred) {
-            try {
-                await interaction.followUp({ content: 'An unexpected error occurred.', ephemeral: true });
-            } catch (followUpError) {
-                console.error('Failed to send follow-up error message:', followUpError);
-            }
-        } else {
+        // Only send error message if the interaction hasn't been acknowledged yet
+        if (!interaction.replied && !interaction.deferred) {
             try {
                 await interaction.reply({ content: 'An unexpected error occurred.', ephemeral: true });
             } catch (replyError) {
                 console.error('Failed to send error message:', replyError);
             }
         }
+        // If interaction is already acknowledged, we can't send another message, so just log the error
     }
 }
 

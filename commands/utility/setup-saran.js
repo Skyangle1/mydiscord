@@ -3,12 +3,18 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup-saran')
-        .setDescription('Setup saran dashboard message'),
+        .setDescription('Setup saran dashboard message (Developer & Owner only)'),
     async execute(interaction) {
-        // Check if user has admin permissions
-        if (!interaction.member.permissions.has('Administrator')) {
+        // Check if user is developer or owner (using CLIENT_OWNER_ID environment variable)
+        const ownerIds = process.env.CLIENT_OWNER_ID ?
+            Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                process.env.CLIENT_OWNER_ID :
+                process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+            : [];
+
+        if (!ownerIds.includes(interaction.user.id)) {
             return await interaction.reply({
-                content: 'Perintah ini hanya dapat digunakan oleh Administrator!',
+                content: 'Perintah ini hanya dapat digunakan oleh Developer dan Owner!',
                 ephemeral: true
             });
         }
@@ -16,12 +22,12 @@ module.exports = {
         await interaction.deferReply({ ephemeral: true }); // Defer reply to extend response time
 
         try {
-            // Get the target channel from environment variable
-            const targetChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
+            // Get the target channel from environment variable (specific for suggestions)
+            const targetChannelId = process.env.SARAN_CHANNEL_ID;
 
             if (!targetChannelId) {
                 await interaction.editReply({
-                    content: 'Target channel for suggestion panel has not been configured. Please set FEEDBACK_LOG_CHANNEL_ID in the .env file.',
+                    content: 'Target channel for suggestion panel has not been configured. Please set SARAN_CHANNEL_ID in the .env file.',
                     ephemeral: true
                 });
                 return;
@@ -37,42 +43,28 @@ module.exports = {
                 return;
             }
 
-            // Create the embed with saran description
+            // Create the embed with professional description
             const embed = new EmbedBuilder()
-                .setTitle('📝 Kotak Aspirasi Mɣralune')
-                .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
+                .setTitle('✨ Kotak Saran Profesional Mɣralune')
+                .setDescription('Platform resmi untuk memberikan masukan dan saran terkait server Mɣralune.\n\nTim kami akan meninjau setiap masukan yang Anda berikan untuk meningkatkan kualitas layanan kami.\n\nGunakan tombol di bawah untuk membuka formulir saran.')
                 .setColor('#811331')
-                .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
+                .setFooter({ text: 'Saran Anda sangat berharga bagi perkembangan komunitas Mɣralune', iconURL: interaction.client.user.displayAvatarURL() })
+                .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId('btn_open_saran') // ID Tombol
-                    .setLabel('Beri Masukan ✨')
+                    .setLabel('Ajukan Saran')
                     .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📝')
             );
 
-            // Try to find and edit the latest suggestion message from the bot in the channel
-            const messages = await targetChannel.messages.fetch({ limit: 20 });
-            const latestSaranMessage = messages.find(msg => msg.author.id === interaction.client.user.id &&
-                msg.embeds.length > 0 &&
-                msg.embeds[0].title &&
-                (msg.embeds[0].title.includes('Kotak Aspirasi') || msg.embeds[0].title.includes('Saran')));
-
-            if (latestSaranMessage) {
-                // Edit the existing message with updated content
-                await latestSaranMessage.edit({ embeds: [embed], components: [row] });
-                await interaction.editReply({
-                    content: `Dashboard Saran berhasil diperbarui di ${targetChannel.toString()}! (Memperbarui pesan sebelumnya)`,
-                    ephemeral: true
-                });
-            } else {
-                // If no existing message found, send a new one at the top
-                await targetChannel.send({ embeds: [embed], components: [row] });
-                await interaction.editReply({
-                    content: `Dashboard Saran berhasil dikirim ke ${targetChannel.toString()}!`,
-                    ephemeral: true
-                });
-            }
+            // Send the suggestion panel to the target channel
+            await targetChannel.send({ embeds: [embed], components: [row] });
+            await interaction.editReply({
+                content: `Dashboard Saran berhasil dikirim ke ${targetChannel.toString()}! Formulir saran siap digunakan oleh anggota server.`,
+                ephemeral: true
+            });
         } catch (error) {
             console.error('Error in setup saran command:', error);
             await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur dashboard saran.', ephemeral: true });
