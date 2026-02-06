@@ -2,7 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('setup-saran')
+        .setName('saran')
         .setDescription('Setup saran dashboard message (Developer & Owner only)'),
     async execute(interaction) {
         // Check if user is developer or owner (using CLIENT_OWNER_ID environment variable)

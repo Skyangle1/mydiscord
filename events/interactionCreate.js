@@ -162,6 +162,75 @@ module.exports = async (client, interaction) => {
                     console.error('Error showing modal:', modalError);
                 }
             }
+            // Handle friend-finding button click
+            else if (interaction.customId === 'btn_cari_teman') {
+                console.log('Interaksi Diterima:', interaction.customId); // Debug log
+                console.log('Opening friend-finding modal...'); // Debug log
+
+                try {
+                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                    // Create a modal
+                    const friendFindingModal = new ModalBuilder()
+                        .setCustomId('modal_cari_teman')
+                        .setTitle('Form Cari Teman');
+
+                    // Input for Name
+                    const nameInput = new TextInputBuilder()
+                        .setCustomId('ft_nama')
+                        .setLabel('Nama')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(30);
+
+                    // Input for Age
+                    const ageLocationInput = new TextInputBuilder()
+                        .setCustomId('ft_umur')
+                        .setLabel('Umur')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setPlaceholder('Contoh: 20, Jakarta atau Rahasia, Bandung');
+
+                    // Input for Gender
+                    const genderStatusInput = new TextInputBuilder()
+                        .setCustomId('ft_gender')
+                        .setLabel('Gender')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setPlaceholder('Contoh: Pria, Single atau Wanita, Mencari');
+
+                    // Input for About Me
+                    const aboutMeInput = new TextInputBuilder()
+                        .setCustomId('ft_hobi')
+                        .setLabel('Tentang Diriku (Hobi/Vibe)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                        .setPlaceholder('Ceritakan sedikit tentang keseharian atau hal yang kamu sukai...');
+
+                    // Input for Interests
+                    const interestsInput = new TextInputBuilder()
+                        .setCustomId('ft_minat')
+                        .setLabel('Minat / Interest')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                        .setPlaceholder('Apa minat atau interest yang kamu punya...');
+
+                    // Add inputs to modal
+                    const firstActionRow = new ActionRowBuilder().addComponents(nameInput);
+                    const secondActionRow = new ActionRowBuilder().addComponents(ageLocationInput);
+                    const thirdActionRow = new ActionRowBuilder().addComponents(genderStatusInput);
+                    const fourthActionRow = new ActionRowBuilder().addComponents(aboutMeInput);
+                    const fifthActionRow = new ActionRowBuilder().addComponents(interestsInput);
+
+                    friendFindingModal.addComponents(firstActionRow, secondActionRow, thirdActionRow, fourthActionRow, fifthActionRow);
+
+                    // Show modal immediately without any async operations in between
+                    await interaction.showModal(friendFindingModal);
+                    console.log('Friend-finding modal shown successfully'); // Debug log
+                } catch (modalError) {
+                    console.error('Error showing friend-finding modal:', modalError);
+                }
+            }
             // Handle reply button clicks
             else if (interaction.customId && interaction.customId.startsWith('btn_reply_')) {
                 const letterId = interaction.customId.split('_')[2];
@@ -226,21 +295,43 @@ module.exports = async (client, interaction) => {
             }
             // Handle Chat Me button click
             else if (interaction.customId && interaction.customId.startsWith('btn_chat_me_')) {
-                const targetUserId = interaction.customId.split('_')[3]; // Extract user ID from custom ID
+                // Extract user ID and type from custom ID
+                // Format: btn_chat_me_{type}_{userId}
+                const parts = interaction.customId.split('_');
+                if (parts.length < 4) {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Format custom ID tidak valid.',
+                            ephemeral: true
+                        });
+                    }
+                    return;
+                }
+
+                const type = parts[3]; // Either 'jodoh' or 'teman'
+                const targetUserId = parts[4]; // The actual user ID
 
                 try {
+                    // Determine title based on type
+                    const title = type === 'teman' ? 'Tuliskan Pesan Kenalanmu' : 'Tuliskan Pesan Perkenalanmu';
+
+                    // Determine placeholder based on type
+                    const placeholder = type === 'teman'
+                        ? 'Halo, aku melihat profilmu di komunitas Folk... bolehkah kita berkenalan?'
+                        : 'Halo, aku melihat profilmu di Velvet... bolehkah kita berkenalan?';
+
                     // Show modal for the message
                     const modal = new ModalBuilder()
-                        .setCustomId(`modal_chat_me_${targetUserId}`)
-                        .setTitle('Tuliskan Pesan Perkenalanmu');
+                        .setCustomId(`modal_chat_me_${type}_${targetUserId}`)
+                        .setTitle(title);
 
                     // Input for the introduction message
                     const messageInput = new TextInputBuilder()
                         .setCustomId('chat_me_message')
-                        .setLabel('Tuliskan Pesan Perkenalanmu')
+                        .setLabel(type === 'teman' ? 'Tuliskan Pesan Kenalanmu' : 'Tuliskan Pesan Perkenalanmu')
                         .setStyle(TextInputStyle.Paragraph)
                         .setRequired(true)
-                        .setPlaceholder('Halo, aku melihat profilmu di Velvet... bolehkah kita berkenalan?');
+                        .setPlaceholder(placeholder);
 
                     const actionRow = new ActionRowBuilder().addComponents(messageInput);
                     modal.addComponents(actionRow);
@@ -288,6 +379,49 @@ module.exports = async (client, interaction) => {
                     if (!interaction.replied && !interaction.deferred) {
                         await interaction.reply({
                             content: 'Terjadi kesalahan saat membuka form saran. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+            // Handle Open Curhat button click
+            else if (interaction.customId === 'btn_open_curhat') {
+                try {
+                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                    // Create a modal
+                    const curhatModal = new ModalBuilder()
+                        .setCustomId('modal_curhat_user')
+                        .setTitle('Curhat Aman & Anonim');
+
+                    // Input for category (required)
+                    const categoryInput = new TextInputBuilder()
+                        .setCustomId('kategori_curhat')
+                        .setLabel('Kategori Curhat')
+                        .setPlaceholder('Contoh: Curhat Harian, Curhat Galau, Curhat Cerita, dll')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true);
+
+                    // Input for message (required)
+                    const messageInput = new TextInputBuilder()
+                        .setCustomId('pesan_curhat')
+                        .setLabel('Isi Curhatmu')
+                        .setPlaceholder('Ceritakan apa yang ingin kamu sampaikan... (semuanya anonim)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true);
+
+                    // Add inputs to modal
+                    const firstActionRow = new ActionRowBuilder().addComponents(categoryInput);
+                    const secondActionRow = new ActionRowBuilder().addComponents(messageInput);
+
+                    curhatModal.addComponents(firstActionRow, secondActionRow);
+
+                    await interaction.showModal(curhatModal);
+                } catch (modalError) {
+                    console.error('Error showing curhat modal:', modalError);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form curhat. Silakan coba lagi.',
                             ephemeral: true
                         });
                     }
@@ -1012,7 +1146,7 @@ module.exports = async (client, interaction) => {
                         .setLabel('Chat Me')
                         .setEmoji('💬')
                         .setStyle(ButtonStyle.Secondary)
-                        .setCustomId(`btn_chat_me_${interaction.user.id}`); // Custom ID with user ID
+                        .setCustomId(`btn_chat_me_jodoh_${interaction.user.id}`); // Custom ID with user ID and type
 
                     const row = new ActionRowBuilder()
                         .addComponents(jodohButton, chatMeButton);
@@ -1067,12 +1201,172 @@ module.exports = async (client, interaction) => {
                     }
                 }
             }
+            // Handle Friend-Finding modal submission
+            else if (interaction.customId && interaction.customId === 'modal_cari_teman') {
+                console.log('BERHASIL MASUK KE BLOK MODAL CARI TEMAN!');
+
+                try {
+                    // Anti-Timeout: Defer reply immediately using flags instead of ephemeral
+                    await interaction.deferReply({ flags: 64 });
+
+                    // Logging Diagnosa: Log saat data mulai diambil
+                    console.log('Starting to retrieve form data from friend-finding modal submission');
+
+                    // Sinkronisasi ID Input: Using the correct input IDs
+                    const nama = interaction.fields.getTextInputValue('ft_nama');
+                    const umur = interaction.fields.getTextInputValue('ft_umur');
+                    const gender = interaction.fields.getTextInputValue('ft_gender');
+                    const hobi = interaction.fields.getTextInputValue('ft_hobi');
+                    const minat = interaction.fields.getTextInputValue('ft_minat');
+
+                    // Log the retrieved values
+                    console.log('Retrieved friend-finding form values:', {
+                        nama: nama,
+                        umur: umur,
+                        gender: gender,
+                        hobi: hobi,
+                        minat: minat
+                    });
+
+                    // Validate that all required values exist
+                    if (!nama || !umur || !gender || !hobi || !minat) {
+                        await interaction.editReply({
+                            content: 'Semua field formulir harus diisi. Mohon lengkapi semua data.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Log the environment variable
+                    console.log('FRIEND_FINDING_CHANNEL_ID from env:', process.env.FRIEND_FINDING_CHANNEL_ID);
+
+                    // Get the friend-finding channel from environment variable
+                    const friendFindingChannelId = process.env.FRIEND_FINDING_CHANNEL_ID;
+
+                    // Check if channel ID is configured
+                    if (!friendFindingChannelId) {
+                        await interaction.editReply({
+                            content: 'Kanal cari teman belum dikonfigurasi. Silakan hubungi administrator.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Get the friend-finding channel
+                    const friendFindingChannel = client.channels.cache.get(friendFindingChannelId);
+
+                    // Log when bot finds the channel object
+                    console.log('Friend-finding channel object found:', friendFindingChannel ? 'YES' : 'NO');
+
+                    // Check if channel exists
+                    if (!friendFindingChannel) {
+                        await interaction.editReply({
+                            content: 'Kanal cari teman tidak ditemukan. Silakan hubungi administrator.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Create embed with friend-finding profile
+                    const profileEmbed = new EmbedBuilder()
+                        .setTitle('🤝 Profil Folk Companion')
+                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+                        .setColor('#007bff')
+                        .addFields(
+                            { name: '👤 Nama', value: nama, inline: false },
+                            { name: '🎂 Usia', value: umur, inline: true },
+                            { name: '♂️/♀️ Gender', value: gender, inline: true },
+                            { name: '✨ Tentang Diriku', value: hobi, inline: false },
+                            { name: '🎯 Minat / Interest', value: minat, inline: false }
+                        )
+                        .setFooter({ text: 'Yang tertarik bisa langsung DM ya!' })
+                        .setTimestamp();
+
+                    // Create buttons - "Gabung Komunitas Folk" and "Chat Me"
+                    const friendButton = new ButtonBuilder()
+                        .setLabel('Gabung Komunitas Folk')
+                        .setEmoji('🤝')
+                        .setStyle(ButtonStyle.Primary)
+                        .setCustomId('btn_cari_teman');
+
+                    const chatMeButton = new ButtonBuilder()
+                        .setLabel('Chat Me')
+                        .setEmoji('💬')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setCustomId(`btn_chat_me_teman_${interaction.user.id}`); // Custom ID with user ID and type
+
+                    const row = new ActionRowBuilder()
+                        .addComponents(friendButton, chatMeButton);
+
+                    // Send the profile to the friend-finding channel
+                    try {
+                        await friendFindingChannel.send({
+                            content: `🌟 Ada profil Folk Companion baru! <@${interaction.user.id}> sedang mencari teman sejiwa.`,
+                            embeds: [profileEmbed],
+                            components: [row]
+                        });
+                    } catch (sendError) {
+                        // Error Handling Ketat: Show complete error details
+                        console.error('Complete error details when sending to friend-finding channel:', {
+                            message: sendError.message,
+                            stack: sendError.stack,
+                            code: sendError.code,
+                            name: sendError.name,
+                            status: sendError.status,
+                            method: sendError.method,
+                            path: sendError.path
+                        });
+
+                        await interaction.editReply({
+                            content: `Terjadi kesalahan saat mengirim profil ke kanal: ${sendError.message}`,
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Final Response: Success confirmation to user
+                    await interaction.editReply({
+                        content: 'Profil Folk Companion kamu telah berhasil dikirim! Temukan teman sejiwa dan mulai petualangan persahabatanmu sekarang.',
+                        flags: 64
+                    });
+                } catch (error) {
+                    // Error Handling Ketat: Show complete error details
+                    console.error('Complete error details in friend-finding form processing:', {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                        code: error.code
+                    });
+
+                    try {
+                        await interaction.editReply({
+                            content: `Terjadi kesalahan saat mengirim profil kamu: ${error.message}`,
+                            flags: 64
+                        });
+                    } catch (editError) {
+                        console.error('Failed to send error message to user:', editError);
+                    }
+                }
+            }
             // Handle Chat Me modal submission
             else if (interaction.customId && interaction.customId.startsWith('modal_chat_me_')) {
                 try {
                     await interaction.deferReply({ flags: 64 });
 
-                    const targetUserId = interaction.customId.split('_')[3]; // Extract target user ID
+                    // Extract target user ID and determine type from the original button custom ID
+                    // The custom ID format is: modal_chat_me_{type}_{userId}
+                    const parts = interaction.customId.split('_');
+                    if (parts.length < 4) {
+                        await interaction.editReply({
+                            content: 'Format custom ID tidak valid.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    const type = parts[3]; // Either 'jodoh' or 'teman'
+                    const targetUserId = parts[4]; // The actual user ID
+
                     const messageContent = interaction.fields.getTextInputValue('chat_me_message');
 
                     // Get the target user
@@ -1085,42 +1379,73 @@ module.exports = async (client, interaction) => {
                         return;
                     }
 
-                    // Create embed for the message
+                    // Create embed for the message with different titles based on context
+                    let title, color, dmContent;
+                    if (type === 'teman') {
+                        title = '🤝 Pesan Kenalan Baru';
+                        color = '#007bff';
+                        dmContent = `👋 Kamu menerima pesan kenalan dari <@${interaction.user.id}>! Seseorang tertarik untuk menjadi teman barumu.`;
+                    } else {
+                        // Default to jodoh context
+                        title = '💌 Pesan Perkenalan Baru';
+                        color = '#811331';
+                        dmContent = `💬 Kamu menerima pesan perkenalan dari <@${interaction.user.id}>! Seseorang tertarik untuk mengenalimu lebih dekat.`;
+                    }
+
                     const messageEmbed = new EmbedBuilder()
-                        .setTitle('💌 Pesan Perkenalan Baru')
+                        .setTitle(title)
                         .setDescription(messageContent)
-                        .setColor('#811331')
+                        .setColor(color)
                         .setAuthor({ name: `${interaction.user.username}#${interaction.user.discriminator}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
                         .setTimestamp();
 
                     try {
-                        // Send DM to the target user
+                        // Send DM to the target user with context-appropriate message
                         await targetUser.send({
                             embeds: [messageEmbed],
-                            content: `💬 Kamu menerima pesan perkenalan dari <@${interaction.user.id}>!`
+                            content: dmContent
                         });
 
-                        // Confirm to the sender
+                        // Confirm to the sender with context-appropriate message
+                        const confirmationMessage = type === 'teman'
+                            ? `Pesan kenalanmu telah dikirim ke <@${targetUser.id}>!`
+                            : `Pesan perkenalanmu telah dikirim ke <@${targetUser.id}>!`;
+
                         await interaction.editReply({
-                            content: `Pesanmu telah dikirim ke <@${targetUser.id}>!`,
+                            content: confirmationMessage,
                             flags: 64
                         });
                     } catch (dmError) {
                         console.error('Error sending DM:', dmError);
-                        await interaction.editReply({
-                            content: 'Gagal mengirim pesan. Mungkin pengguna menonaktifkan pesan pribadi.',
-                            flags: 64
-                        });
+                        try {
+                            await interaction.editReply({
+                                content: 'Gagal mengirim pesan. Mungkin pengguna menonaktifkan pesan pribadi.',
+                                flags: 64
+                            });
+                        } catch (editError) {
+                            console.error('Failed to edit reply after DM error:', editError);
+                        }
                     }
                 } catch (error) {
                     console.error('Error in chat me modal submission:', error);
-                    try {
-                        await interaction.editReply({
-                            content: 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
-                            flags: 64
-                        });
-                    } catch (editError) {
-                        console.error('Failed to send error message:', editError);
+                    if (!interaction.replied && !interaction.deferred) {
+                        try {
+                            await interaction.reply({
+                                content: 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
+                                flags: 64
+                            });
+                        } catch (replyError) {
+                            console.error('Failed to send error message:', replyError);
+                        }
+                    } else if (!interaction.replied) {
+                        try {
+                            await interaction.editReply({
+                                content: 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
+                                flags: 64
+                            });
+                        } catch (editError) {
+                            console.error('Failed to edit reply after error:', editError);
+                        }
                     }
                 }
             }
@@ -1136,9 +1461,6 @@ module.exports = async (client, interaction) => {
                 if (!saranChannel) {
                     saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_LOG_CHANNEL_ID);
                 }
-
-                // Ambil role staff untuk ditag
-                const staffRole = interaction.guild.roles.cache.get(process.env.STAFF_ROLE_ID);
 
                 // Buat embed untuk menampilkan saran user
                 const userSuggestionEmbed = new EmbedBuilder()
@@ -1172,17 +1494,12 @@ module.exports = async (client, interaction) => {
                         if (!botPermissions?.has('EmbedLinks')) {
                             console.log('ERROR: Bot lacks EmbedLinks permission in saran channel');
                             // Send without embed if no embed permission
-                            const messageContent = staffRole ?
-                                `<@&${staffRole.id}>\n**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}` :
-                                `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
+                            const messageContent = `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
 
                             await saranChannel.send(messageContent);
                         } else {
-                            // Kirim pesan saran user dengan tag staff jika role tersedia
-                            const messageContent = staffRole ?
-                                { content: `<@&${staffRole.id}>`, embeds: [userSuggestionEmbed] } :
-                                { embeds: [userSuggestionEmbed] };
-                            await saranChannel.send(messageContent);
+                            // Kirim pesan saran user tanpa men-tag staff
+                            await saranChannel.send({ embeds: [userSuggestionEmbed] });
                         }
 
                         // STICKY BUTTON LOGIC: Find and delete the old button-only message, then send a new one to keep it at the bottom
@@ -1261,9 +1578,6 @@ module.exports = async (client, interaction) => {
                     saranChannel = interaction.guild.channels.cache.get(process.env.SARAN_LOG_CHANNEL_ID);
                 }
 
-                // Ambil role staff untuk ditag
-                const staffRole = interaction.guild.roles.cache.get(process.env.STAFF_ROLE_ID);
-
                 // Buat embed untuk menampilkan saran user
                 const userSuggestionEmbed = new EmbedBuilder()
                     .setTitle('✨ Saran Baru Mɣralune')
@@ -1296,17 +1610,12 @@ module.exports = async (client, interaction) => {
                         if (!botPermissions?.has('EmbedLinks')) {
                             console.log('ERROR: Bot lacks EmbedLinks permission in saran channel');
                             // Send without embed if no embed permission
-                            const messageContent = staffRole ?
-                                `<@&${staffRole.id}>\n**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}` :
-                                `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
+                            const messageContent = `**Saran Baru!**\nPengirim: ${interaction.user.tag}\nKategori: ${kategori}\nPesan: ${pesan}`;
 
                             await saranChannel.send(messageContent);
                         } else {
-                            // Kirim pesan saran user dengan tag staff jika role tersedia
-                            const messageContent = staffRole ?
-                                { content: `<@&${staffRole.id}>`, embeds: [userSuggestionEmbed] } :
-                                { embeds: [userSuggestionEmbed] };
-                            await saranChannel.send(messageContent);
+                            // Kirim pesan saran user tanpa men-tag staff
+                            await saranChannel.send({ embeds: [userSuggestionEmbed] });
                         }
 
                         // STICKY BUTTON LOGIC: Find and delete the old button-only message, then send a new one to keep it at the bottom
@@ -1371,6 +1680,118 @@ module.exports = async (client, interaction) => {
                 }
 
                 await interaction.editReply({ content: 'Terima kasih! Saran-mu sudah terkirim ke tim Mɣralune. ✨', flags: 64 });
+            }
+            // Handle Curhat modal submission
+            else if (interaction.customId && interaction.customId === 'modal_curhat_user') {
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+                const kategori = interaction.fields.getTextInputValue('kategori_curhat');
+                const pesan = interaction.fields.getTextInputValue('pesan_curhat');
+
+                // Gunakan saluran curhat utama
+                const curhatChannel = interaction.guild.channels.cache.get(process.env.CURHAT_CHANNEL_ID);
+
+                // Buat embed untuk menampilkan curhat user secara anonim
+                const userCurhatEmbed = new EmbedBuilder()
+                    .setTitle('💭 Curhat Awan Kelabu')
+                    .setColor('#4A90E2')
+                    .addFields(
+                        { name: '🏷️ Kategori', value: kategori, inline: true },
+                        { name: '💭 Curhat', value: `\`\`\`${pesan}\`\`\`` }
+                    )
+                    .setFooter({ text: 'Curhat anonim - tidak ada identitas pengirim' })
+                    .setTimestamp();
+
+                // Check if curhat channel exists and bot has permissions
+                if (curhatChannel) {
+                    try {
+                        // Check if bot has permissions to send messages in the channel
+                        const botPermissions = curhatChannel.permissionsFor(interaction.client.user);
+
+                        if (!botPermissions?.has('SendMessages')) {
+                            console.log('ERROR: Bot lacks SendMessages permission in curhat channel');
+                            await interaction.editReply({ content: 'Terima kasih! Curhat-mu sudah terkirim secara anonim. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('ViewChannel')) {
+                            console.log('ERROR: Bot lacks ViewChannel permission in curhat channel');
+                            await interaction.editReply({ content: 'Terima kasih! Curhat-mu sudah terkirim secara anonim. ✨', flags: 64 });
+                            return;
+                        }
+
+                        if (!botPermissions?.has('EmbedLinks')) {
+                            console.log('ERROR: Bot lacks EmbedLinks permission in curhat channel');
+                            // Send without embed if no embed permission
+                            const messageContent = `**Curhat Anonim!**\nKategori: ${kategori}\nIsi: ${pesan}`;
+                            await curhatChannel.send(messageContent);
+                        } else {
+                            // Kirim pesan curhat user secara anonim
+                            await curhatChannel.send({ embeds: [userCurhatEmbed] });
+                        }
+
+                        // STICKY BUTTON LOGIC: Find and delete the old curhat button-only message, then send a new one to keep it at the bottom
+                        try {
+                            // Find the latest curhat button-only message in the channel
+                            const messages = await curhatChannel.messages.fetch({ limit: 20 });
+                            const buttonOnlyMessage = messages.find(msg =>
+                                msg.author.id === interaction.client.user.id &&
+                                msg.components.length > 0 && // Message has components (buttons)
+                                msg.embeds.length === 0 // Message has no embed, only buttons
+                            );
+
+                            // Delete the old button-only message if found
+                            if (buttonOnlyMessage) {
+                                await buttonOnlyMessage.delete();
+                            }
+
+                            // Send a new button-only message at the bottom
+                            const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                            const newRow = new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId('btn_open_curhat') // ID Tombol
+                                    .setLabel('Curhat Aja')
+                                    .setEmoji('💭')
+                                    .setStyle(ButtonStyle.Primary)
+                            );
+
+                            await curhatChannel.send({ components: [newRow] });
+                        } catch (stickyError) {
+                            console.error('Error in curhat sticky button logic:', stickyError);
+
+                            // If sticky button logic fails, send a new button-only message anyway
+                            try {
+                                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                                const fallbackRow = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId('btn_open_curhat') // ID Tombol
+                                        .setLabel('Curhat Aja')
+                                        .setEmoji('💭')
+                                        .setStyle(ButtonStyle.Primary)
+                                );
+
+                                await curhatChannel.send({ components: [fallbackRow] });
+                            } catch (fallbackError) {
+                                console.error('Error in fallback curhat sticky button logic:', fallbackError);
+                            }
+                        }
+                    } catch (channelError) {
+                        console.error('Error sending curhat to channel:', channelError);
+                        // Still send success message to user even if channel fails
+                    }
+                } else {
+                    console.log('Curhat channel not found or not configured');
+                    // Jika tidak ada channel yang ditemukan, beri tahu user
+                    await interaction.editReply({
+                        content: 'Terima kasih! Curhat-mu sudah terkirim secara anonim. ✨',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                await interaction.editReply({ content: 'Terima kasih! Curhat-mu sudah terkirim secara anonim. ✨', flags: 64 });
             }
             // Handle modal submission for new letter - UPDATED IMPLEMENTATION
             else if (interaction.customId && interaction.customId === 'modal_letter_submit') {

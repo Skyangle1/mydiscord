@@ -2,13 +2,19 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('setup-jodoh')
+        .setName('jodoh')
         .setDescription('Setup matchmaking dashboard message'),
     async execute(interaction) {
-        // Check if user has admin permissions
-        if (!interaction.member.permissions.has('Administrator')) {
+        // Check if user is developer or owner (using CLIENT_OWNER_ID environment variable)
+        const ownerIds = process.env.CLIENT_OWNER_ID ?
+            Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                process.env.CLIENT_OWNER_ID :
+                process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+            : [];
+
+        if (!ownerIds.includes(interaction.user.id)) {
             return await interaction.reply({
-                content: 'Perintah ini hanya dapat digunakan oleh Administrator!',
+                content: 'Perintah ini hanya dapat digunakan oleh Developer dan Owner!',
                 flags: 64
             });
         }

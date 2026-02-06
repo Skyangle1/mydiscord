@@ -3,23 +3,19 @@ const axios = require('axios');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('daily-love')
+        .setName('quotedaily')
         .setDescription('Check the daily love quotes channel setup'),
     async execute(interaction) {
-        const requiredRoleId = process.env.SETUP_ROLE_ID;
-        if (!requiredRoleId) {
-            return await interaction.reply({
-                content: 'Role untuk menggunakan perintah ini belum disetel!',
-                ephemeral: true
-            });
-        }
+        // Check if user is developer or owner (using CLIENT_OWNER_ID environment variable)
+        const ownerIds = process.env.CLIENT_OWNER_ID ?
+            Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                process.env.CLIENT_OWNER_ID :
+                process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+            : [];
 
-        const member = interaction.member;
-        const hasRole = member.roles.cache.has(requiredRoleId);
-
-        if (!hasRole) {
+        if (!ownerIds.includes(interaction.user.id)) {
             return await interaction.reply({
-                content: `Anda tidak memiliki role yang diperlukan untuk menggunakan perintah ini!`,
+                content: 'Perintah ini hanya dapat digunakan oleh Developer dan Owner!',
                 ephemeral: true
             });
         }
