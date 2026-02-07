@@ -2,7 +2,6 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { initializeDatabase } = require('./database/db');
 const GroqDailyQuoteScheduler = require('./myralune/groq-daily-quote-scheduler');
-const GroqQuoteScheduler = require('./myralune/groq-quote-scheduler');
 
 // Initialize the database
 initializeDatabase();
@@ -25,15 +24,12 @@ loadEvents(client);
 // Initialize and start the daily quote scheduler using Groq
 const groqDailyQuoteScheduler = new GroqDailyQuoteScheduler(client);
 
-// Initialize and start the Groq quote scheduler for testing (every 30 seconds)
-const groqQuoteScheduler = new GroqQuoteScheduler(client);
-
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
     groqDailyQuoteScheduler.start();
 
-    // Start the 30-second Groq quote scheduler for testing
-    groqQuoteScheduler.start();
+    // Note: Periodic quote scheduler has been removed to prevent duplication
+    // Only the daily scheduler runs at 7:00 AM and 7:00 PM WIB
 });
 
 client.login(process.env.TOKEN);

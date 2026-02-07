@@ -45,20 +45,33 @@ module.exports = {
 
             // Create the embed with bonded house description
             const embed = new EmbedBuilder()
-                .setTitle('🏠 Bangun Keluargamu')
-                .setDescription('Kamu bisa membangun keluargamu sendiri di sini! Klik tombol di bawah untuk memulai membangun keluarga.')
+                .setTitle('🏠 Keluarga Mɣralune')
+                .setDescription('Platform resmi untuk mengelola keluarga di server Mɣralune.\n\nGunakan tombol-tombol di bawah untuk membangun, bergabung, atau melihat daftar keluarga.')
                 .setColor('#FF69B4')
+                .setFooter({ text: 'Keluarga adalah komunitas kecil dalam komunitas besar Mɣralune' })
                 .setTimestamp();
 
-            // Create the button
+            // Create the buttons
             const buildButton = new ButtonBuilder()
                 .setLabel('Bangun Keluarga')
                 .setStyle(ButtonStyle.Success)
                 .setCustomId('btn_build_family')
-                .setEmoji('🏠');
+                .setEmoji('🏗️');
+
+            const joinButton = new ButtonBuilder()
+                .setLabel('Masuk Keluarga')
+                .setStyle(ButtonStyle.Primary)
+                .setCustomId('btn_join_family')
+                .setEmoji('👥');
+
+            const listButton = new ButtonBuilder()
+                .setLabel('Daftar Keluarga')
+                .setStyle(ButtonStyle.Secondary)
+                .setCustomId('btn_list_families')
+                .setEmoji('📋');
 
             const row = new ActionRowBuilder()
-                .addComponents(buildButton);
+                .addComponents(buildButton, joinButton, listButton);
 
             // Send the bonded house panel to the target channel
             await targetChannel.send({ embeds: [embed], components: [row] });

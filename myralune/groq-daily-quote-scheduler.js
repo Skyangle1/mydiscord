@@ -21,23 +21,23 @@ class GroqDailyQuoteScheduler {
         }
 
         this.task = null;
-        this.suggestionRefreshTask = null;
+        // this.suggestionRefreshTask = null; // Disabled to prevent disturbance
     }
 
     start() {
-        // Schedule the task to run twice daily (every 12 hours) - at 7:00 AM and 7:00 PM WIB (UTC+7)
+        // Schedule the task to run twice daily - at 7:00 AM and 7:00 PM WIB (UTC+7)
         this.task = cron.schedule('0 7,19 * * *', () => {
             this.sendDailyQuote();
         }, {
             scheduled: false // We'll start it after checking if it should run
         });
 
-        // Schedule the suggestion panel refresh to run every hour to keep it visible
-        this.suggestionRefreshTask = cron.schedule('0 * * * *', () => {
-            this.refreshSuggestionPanel();
-        }, {
-            scheduled: false
-        });
+        // The suggestion panel refresh scheduler has been disabled to prevent disturbance
+        // this.suggestionRefreshTask = cron.schedule('0 * * * *', () => {
+        //     this.refreshSuggestionPanel();
+        // }, {
+        //     scheduled: false
+        // });
 
         // Check if the channel is configured in .env and start the schedulers
         this.checkEnvAndStart();
@@ -53,14 +53,12 @@ class GroqDailyQuoteScheduler {
             console.log('Daily quote channel not configured in .env file, scheduler not started.');
         }
 
-        // Start the suggestion panel refresh task if the channel is configured
-        const feedbackChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
-        if (feedbackChannelId && feedbackChannelId !== 'your_feedback_log_channel_id_here') {
-            this.suggestionRefreshTask.start();
-            console.log(`Suggestion panel refresh scheduler started for channel ${feedbackChannelId}. Running every hour to keep button visible.`);
-        } else {
-            console.log('Feedback channel not configured in .env file, suggestion refresh scheduler not started.');
+        // Skip the suggestion panel refresh task to prevent disturbance
+        // Stop the suggestion refresh task if it was previously started
+        if (this.suggestionRefreshTask) {
+            this.suggestionRefreshTask.stop();
         }
+        console.log('Suggestion panel refresh scheduler disabled to prevent disturbance.');
     }
 
     async sendDailyQuote() {
@@ -113,45 +111,8 @@ class GroqDailyQuoteScheduler {
         }
     }
 
-    async refreshSuggestionPanel() {
-        const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-        const feedbackChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
-
-        if (!feedbackChannelId || feedbackChannelId === 'your_feedback_log_channel_id_here') {
-            console.log('Feedback channel not configured in .env file, skipping suggestion panel refresh.');
-            return;
-        }
-
-        try {
-            // Get the channel
-            const channel = this.client.channels.cache.get(feedbackChannelId);
-
-            if (!channel) {
-                console.error(`Could not find feedback channel with ID ${feedbackChannelId}`);
-                return;
-            }
-
-            // Create the embed with saran description
-            const embed = new EmbedBuilder()
-                .setTitle('📝 Kotak Aspirasi Mɣralune')
-                .setDescription('Punya saran, kritik, atau menemukan bug? Kami ingin mendengar suaramu demi kenyamanan bersama di Mɣralune.\n\nKlik tombol di bawah untuk menuliskan saran-mu!')
-                .setColor('#811331')
-                .setFooter({ text: 'Terima kasih telah membantu kami berkembang' });
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('btn_open_saran') // ID Tombol
-                    .setLabel('Beri Masukan ✨')
-                    .setStyle(ButtonStyle.Primary)
-            );
-
-            // Send the message with button to the target channel
-            await channel.send({ embeds: [embed], components: [row] });
-            console.log('Suggestion panel refreshed successfully!');
-        } catch (error) {
-            console.error('Error refreshing suggestion panel:', error);
-        }
-    }
+    // refreshSuggestionPanel() has been disabled to prevent disturbance
+    // The suggestion panel is only sent once when the /saran command is used
 }
 
 module.exports = GroqDailyQuoteScheduler;
