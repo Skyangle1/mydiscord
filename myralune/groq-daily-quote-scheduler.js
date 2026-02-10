@@ -44,11 +44,12 @@ class GroqDailyQuoteScheduler {
     }
 
     checkEnvAndStart() {
-        const dailyQuoteChannelId = process.env.DAILY_QUOTE_CHANNEL_ID;
+        const dailyQuoteChannelIds = process.env.DAILY_QUOTE_CHANNEL_ID ?
+            process.env.DAILY_QUOTE_CHANNEL_ID.split(',').map(id => id.trim()) : [];
 
-        if (dailyQuoteChannelId && dailyQuoteChannelId !== 'your_daily_quote_channel_id_here') {
+        if (dailyQuoteChannelIds && dailyQuoteChannelIds.length > 0 && !dailyQuoteChannelIds.includes('your_daily_quote_channel_id_here')) {
             this.task.start();
-            console.log(`Daily quote scheduler started for channel ${dailyQuoteChannelId}. Running twice daily at 7:00 AM and 7:00 PM WIB.`);
+            console.log(`Daily quote scheduler started for channels ${dailyQuoteChannelIds.join(', ')}. Running twice daily at 7:00 AM and 7:00 PM WIB.`);
         } else {
             console.log('Daily quote channel not configured in .env file, scheduler not started.');
         }
@@ -62,9 +63,10 @@ class GroqDailyQuoteScheduler {
     }
 
     async sendDailyQuote() {
-        const dailyQuoteChannelId = process.env.DAILY_QUOTE_CHANNEL_ID;
+        const dailyQuoteChannelIds = process.env.DAILY_QUOTE_CHANNEL_ID ?
+            process.env.DAILY_QUOTE_CHANNEL_ID.split(',').map(id => id.trim()) : [];
 
-        if (!dailyQuoteChannelId || dailyQuoteChannelId === 'your_daily_quote_channel_id_here') {
+        if (!dailyQuoteChannelIds || dailyQuoteChannelIds.length === 0 || dailyQuoteChannelIds.includes('your_daily_quote_channel_id_here')) {
             console.log('Daily quote channel not configured in .env file, skipping daily quote.');
             return;
         }
@@ -78,15 +80,17 @@ class GroqDailyQuoteScheduler {
             // Get the quote from Groq API
             const quote = await this.groqService.getDailyLoveQuote();
 
-            // Get the channel
-            const channel = this.client.channels.cache.get(dailyQuoteChannelId);
+            // Get all valid channels
+            const validChannels = dailyQuoteChannelIds
+                .map(id => this.client.channels.cache.get(id))
+                .filter(channel => channel !== undefined);
 
-            if (!channel) {
-                console.error(`Could not find channel with ID ${dailyQuoteChannelId}`);
+            if (validChannels.length === 0) {
+                console.error(`Could not find any valid channels with IDs ${dailyQuoteChannelIds.join(', ')}`);
                 return;
             }
 
-            // Create and send the embed
+            // Create the embed
             const { EmbedBuilder } = require('discord.js');
             const embed = new EmbedBuilder()
                 .setTitle('💖 Daily Love Quote')
@@ -95,8 +99,12 @@ class GroqDailyQuoteScheduler {
                 .setTimestamp()
                 .setFooter({ text: 'Powered by Groq AI ❤️' });
 
-            await channel.send({ embeds: [embed] });
-            console.log('Daily love quote sent successfully!');
+            // Send the embed to all valid channels
+            for (const channel of validChannels) {
+                await channel.send({ embeds: [embed] });
+            }
+            
+            console.log(`Daily love quote sent successfully to ${validChannels.length} channel(s)!`);
         } catch (error) {
             // Handle specific Discord API errors
             if (error.code === 50013) { // Missing Permissions

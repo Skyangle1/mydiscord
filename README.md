@@ -23,6 +23,7 @@ A Discord bot that allows users to send anonymous or named love/confession lette
    - `FEEDBACK_LOG_CHANNEL_ID`: The channel ID for feedback/suggestion logs
    - `SARAN_CHANNEL_ID`: The channel ID for saran (suggestions) submissions
    - `FEEDBACK_CHANNEL_ID`: The channel ID for new feedback submissions
+   - `CLAIM_LOG_CHANNEL_ID`: The channel ID for claim log threads
    - `DAILY_QUOTE_CHANNEL_ID`: The channel ID for daily quotes
 4. Start the bot: `npm start`
 5. In Discord, use `/setup` command in the channel where you want the panel
@@ -31,6 +32,7 @@ A Discord bot that allows users to send anonymous or named love/confession lette
 - `/setup` - Creates the confession panel with the "Write Love Letter" button
 - `/setup-jodoh` - Sets up the matchmaking panel
 - `/setup-saran` - Sets up the feedback/suggestion panel
+- `/claim` - Sets up the claim panel (Owner & Developer only)
 - `/tarik` - Pulls a user to a voice channel (requires special role)
 - `/daily-love` - Checks daily love quotes setup
 - `/feedback` - Opens a feedback form with star ratings

@@ -9,8 +9,11 @@ module.exports = async (client, interaction) => {
         }
 
         // Check if the interaction is from the allowed guild
-        const allowedGuildId = process.env.ALLOWED_GUILD_ID;
-        if (allowedGuildId && interaction.guildId !== allowedGuildId) {
+        // Skip this check if interaction is in DM (no guildId)
+        const allowedGuildIds = process.env.ALLOWED_GUILD_ID ?
+            process.env.ALLOWED_GUILD_ID.split(',').map(id => id.trim()) : [];
+        
+        if (interaction.guildId && allowedGuildIds.length > 0 && !allowedGuildIds.includes(interaction.guildId)) {
             // Only reply if the interaction hasn't been replied to yet
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
@@ -309,7 +312,18 @@ module.exports = async (client, interaction) => {
                 }
 
                 const type = parts[3]; // Either 'jodoh' or 'teman'
-                const targetUserId = parts[4]; // The actual user ID
+                const targetUserId = parts.slice(4).join('_'); // The actual user ID (handle cases where ID might have underscores)
+
+                // Validate that targetUserId is a valid Discord Snowflake
+                if (!targetUserId || targetUserId === 'undefined' || !/^\d{17,19}$/.test(targetUserId)) {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'ID pengguna tujuan tidak valid.',
+                            ephemeral: true
+                        });
+                    }
+                    return;
+                }
 
                 try {
                     // Determine title based on type
@@ -650,6 +664,274 @@ module.exports = async (client, interaction) => {
                     }
                 }
             }
+            // Handle Claim button click
+            else if (interaction.customId === 'btn_open_claim') {
+                try {
+                    // Check if user is authorized to use this feature
+                    const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                        Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                            process.env.CLIENT_OWNER_ID :
+                            process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                        : [];
+
+                    if (!authorizedIds.includes(interaction.user.id)) {
+                        return await interaction.reply({
+                            content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                            ephemeral: true
+                        });
+                    }
+
+                    // Show a modal for claiming rewards
+                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                    const claimModal = new ModalBuilder()
+                        .setCustomId('modal_claim_reward')
+                        .setTitle('Claim Reward');
+
+                    // Input for claim reason/description
+                    const claimInput = new TextInputBuilder()
+                        .setCustomId('claim_input')
+                        .setLabel('Deskripsi Klaim')
+                        .setPlaceholder('Jelaskan reward apa yang ingin kamu klaim...')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true);
+
+                    const actionRow = new ActionRowBuilder().addComponents(claimInput);
+                    claimModal.addComponents(actionRow);
+
+                    await interaction.showModal(claimModal);
+                } catch (error) {
+                    console.error('Error handling claim button:', error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuka form klaim. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+            // Handle Approve Claim button click
+            else if (interaction.customId && interaction.customId.startsWith('btn_approve_claim_')) {
+                try {
+                    // Check if user is authorized to use this feature
+                    const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                        Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                            process.env.CLIENT_OWNER_ID :
+                            process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                        : [];
+
+                    if (!authorizedIds.includes(interaction.user.id)) {
+                        return await interaction.reply({
+                            content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                            ephemeral: true
+                        });
+                    }
+
+                    // Extract claim ID from custom ID
+                    const claimId = interaction.customId.split('_')[3]; // Format: btn_approve_claim_{id}
+
+                    // Get the database connection
+                    const { db } = require('../database/db');
+
+                    // Update claim status to APPROVED
+                    const updateClaim = () => {
+                        return new Promise((resolve, reject) => {
+                            const query = `UPDATE claims SET status = ? WHERE id = ?`;
+                            db.run(query, ['APPROVED', claimId], function(err) {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    resolve(this.changes); // Number of affected rows
+                                }
+                            });
+                        });
+                    };
+
+                    try {
+                        const changes = await updateClaim();
+                        if (changes === 0) {
+                            await interaction.reply({
+                                content: 'Klaim tidak ditemukan.',
+                                ephemeral: true
+                            });
+                            return;
+                        }
+
+                        // Get the user who made the claim
+                        const getUserClaim = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `SELECT user_id FROM claims WHERE id = ?`;
+                                db.get(query, [claimId], (err, row) => {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve(row);
+                                    }
+                                });
+                            });
+                        };
+
+                        const claimData = await getUserClaim();
+                        if (claimData) {
+                            try {
+                                // Send DM to the user who made the claim
+                                const user = await interaction.client.users.fetch(claimData.user_id);
+                                await user.send(`🎉 Klaimmu dengan ID #${claimId} telah DISETUJUI oleh admin. Terima kasih!`);
+                            } catch (dmError) {
+                                console.error('Could not send DM to user:', dmError.message);
+                            }
+                        }
+
+                        // Update the embed to show approved status
+                        const { EmbedBuilder } = require('discord.js');
+                        const updatedEmbed = new EmbedBuilder()
+                            .setTitle(`🎁 Klaim #${claimId} - DISETUJUI`)
+                            .setDescription(interaction.message.embeds[0].data.description)
+                            .setColor('#00FF00') // Green color for approved
+                            .addFields(
+                                { name: 'Diklaim oleh', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Diklaim oleh').value, inline: true },
+                                { name: 'Status', value: 'DISETUJUI', inline: true },
+                                { name: 'Tanggal', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Tanggal').value, inline: true },
+                                { name: 'Disetujui oleh', value: interaction.user.tag, inline: false }
+                            )
+                            .setTimestamp();
+
+                        // Remove the buttons
+                        await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+                        // Send success message to admin
+                        await interaction.followUp({
+                            content: `Klaim #${claimId} telah disetujui.`,
+                            ephemeral: true
+                        });
+                    } catch (dbError) {
+                        console.error('Database error updating claim:', dbError);
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat memperbarui status klaim.',
+                            ephemeral: true
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error handling approve claim button:', error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat menyetujui klaim. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+            // Handle Reject Claim button click
+            else if (interaction.customId && interaction.customId.startsWith('btn_reject_claim_')) {
+                try {
+                    // Check if user is authorized to use this feature
+                    const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                        Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                            process.env.CLIENT_OWNER_ID :
+                            process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                        : [];
+
+                    if (!authorizedIds.includes(interaction.user.id)) {
+                        return await interaction.reply({
+                            content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                            ephemeral: true
+                        });
+                    }
+
+                    // Extract claim ID from custom ID
+                    const claimId = interaction.customId.split('_')[3]; // Format: btn_reject_claim_{id}
+
+                    // Get the database connection
+                    const { db } = require('../database/db');
+
+                    // Update claim status to REJECTED
+                    const updateClaim = () => {
+                        return new Promise((resolve, reject) => {
+                            const query = `UPDATE claims SET status = ? WHERE id = ?`;
+                            db.run(query, ['REJECTED', claimId], function(err) {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    resolve(this.changes); // Number of affected rows
+                                }
+                            });
+                        });
+                    };
+
+                    try {
+                        const changes = await updateClaim();
+                        if (changes === 0) {
+                            await interaction.reply({
+                                content: 'Klaim tidak ditemukan.',
+                                ephemeral: true
+                            });
+                            return;
+                        }
+
+                        // Get the user who made the claim
+                        const getUserClaim = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `SELECT user_id FROM claims WHERE id = ?`;
+                                db.get(query, [claimId], (err, row) => {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve(row);
+                                    }
+                                });
+                            });
+                        };
+
+                        const claimData = await getUserClaim();
+                        if (claimData) {
+                            try {
+                                // Send DM to the user who made the claim
+                                const user = await interaction.client.users.fetch(claimData.user_id);
+                                await user.send(`⚠️ Klaimmu dengan ID #${claimId} telah DITOLAK oleh admin.`);
+                            } catch (dmError) {
+                                console.error('Could not send DM to user:', dmError.message);
+                            }
+                        }
+
+                        // Update the embed to show rejected status
+                        const { EmbedBuilder } = require('discord.js');
+                        const updatedEmbed = new EmbedBuilder()
+                            .setTitle(`🎁 Klaim #${claimId} - DITOLAK`)
+                            .setDescription(interaction.message.embeds[0].data.description)
+                            .setColor('#FF0000') // Red color for rejected
+                            .addFields(
+                                { name: 'Diklaim oleh', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Diklaim oleh').value, inline: true },
+                                { name: 'Status', value: 'DITOLAK', inline: true },
+                                { name: 'Tanggal', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Tanggal').value, inline: true },
+                                { name: 'Ditolak oleh', value: interaction.user.tag, inline: false }
+                            )
+                            .setTimestamp();
+
+                        // Remove the buttons
+                        await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+                        // Send success message to admin
+                        await interaction.followUp({
+                            content: `Klaim #${claimId} telah ditolak.`,
+                            ephemeral: true
+                        });
+                    } catch (dbError) {
+                        console.error('Database error updating claim:', dbError);
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat memperbarui status klaim.',
+                            ephemeral: true
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error handling reject claim button:', error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat menolak klaim. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
             // Handle Open Feedback button click from message
             else if (interaction.customId === 'btn_open_saran_from_msg') {
                 try {
@@ -874,30 +1156,6 @@ module.exports = async (client, interaction) => {
                                 }
 
                                 await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                // ALSO send to the staff log channel
-                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                if (logChannel) {
-                                    try {
-                                        const logEmbed = new EmbedBuilder()
-                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                            .setColor('#811331')
-                                            .setThumbnail(interaction.user.displayAvatarURL())
-                                            .setDescription(replyContent)
-                                            .addFields(
-                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                            )
-                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                            .setTimestamp();
-
-                                        await logChannel.send({ embeds: [logEmbed] });
-                                    } catch (logError) {
-                                        console.error('Error sending to log channel:', logError);
-                                        // Don't fail the main operation if logging fails
-                                    }
-                                }
                             }
                         } catch (error) {
                             console.error('Error sending reply:', error);
@@ -1079,30 +1337,6 @@ module.exports = async (client, interaction) => {
                                     }
 
                                     await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                    // ALSO send to the staff log channel
-                                    const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                    if (logChannel) {
-                                        try {
-                                            const logEmbed = new EmbedBuilder()
-                                                .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                                .setColor('#811331')
-                                                .setThumbnail(interaction.user.displayAvatarURL())
-                                                .setDescription(replyContent)
-                                                .addFields(
-                                                    { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                    { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                    { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                                )
-                                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                                .setTimestamp();
-
-                                            await logChannel.send({ embeds: [logEmbed] });
-                                        } catch (logError) {
-                                            console.error('Error sending to log channel:', logError);
-                                            // Don't fail the main operation if logging fails
-                                        }
-                                    }
                                     return;
                                 }
 
@@ -1141,30 +1375,6 @@ module.exports = async (client, interaction) => {
                                 }
 
                                 await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                // ALSO send to the staff log channel
-                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                if (logChannel) {
-                                    try {
-                                        const logEmbed = new EmbedBuilder()
-                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                            .setColor('#811331')
-                                            .setThumbnail(interaction.user.displayAvatarURL())
-                                            .setDescription(replyContent)
-                                            .addFields(
-                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                            )
-                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                            .setTimestamp();
-
-                                        await logChannel.send({ embeds: [logEmbed] });
-                                    } catch (logError) {
-                                        console.error('Error sending to log channel:', logError);
-                                        // Don't fail the main operation if logging fails
-                                    }
-                                }
                             }
                         } catch (error) {
                             console.error('Error sending additional reply:', error);
@@ -1205,6 +1415,9 @@ module.exports = async (client, interaction) => {
             } else if (interaction.customId && interaction.customId.startsWith('modal_additional_reply_')) {
                 console.log('ID yang Dicari:', '"modal_additional_reply_"');
                 console.log('Apakah Cocok?', interaction.customId.startsWith('modal_additional_reply_'));
+            } else if (interaction.customId && interaction.customId === 'modal_join_family') {
+                console.log('ID yang Dicari:', '"modal_join_family"');
+                console.log('Apakah Cocok?', interaction.customId === 'modal_join_family');
             } else {
                 console.log('ID yang Dicari:', 'other modal types');
                 console.log('Apakah Cocok?', 'N/A - Custom handling');
@@ -1522,6 +1735,15 @@ module.exports = async (client, interaction) => {
 
                     const type = parts[3]; // Either 'jodoh' or 'teman'
                     const targetUserId = parts[4]; // The actual user ID
+
+                    // Validate that targetUserId is a valid Discord Snowflake
+                    if (!targetUserId || targetUserId === 'undefined' || !/^\d{17,19}$/.test(targetUserId)) {
+                        await interaction.editReply({
+                            content: 'ID pengguna tujuan tidak valid.',
+                            flags: 64
+                        });
+                        return;
+                    }
 
                     const messageContent = interaction.fields.getTextInputValue('chat_me_message');
 
@@ -1949,6 +2171,207 @@ module.exports = async (client, interaction) => {
 
                 await interaction.editReply({ content: 'Terima kasih! Curhat-mu sudah terkirim secara anonim. ✨', flags: 64 });
             }
+            // Handle Join Family modal submission
+            else if (interaction.customId === 'modal_join_family') {
+                console.log('Memasuki handler modal_join_family');
+                await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
+
+                try {
+                    // Get the database connection
+                    const { db } = require('../database/db');
+
+                    // Get values from modal
+                    const familyName = interaction.fields.getTextInputValue('join_family_name');
+                    const joinReason = interaction.fields.getTextInputValue('join_reason');
+
+                    console.log(`Nama keluarga yang diminta: ${familyName}`);
+                    console.log(`Alasan bergabung: ${joinReason}`);
+
+                    // Check if user is already a family head using async method
+                    const userFamilyHead = await new Promise((resolve, reject) => {
+                        db.get('SELECT * FROM families WHERE owner_id = ?', [interaction.user.id], (err, row) => {
+                            if (err) {
+                                console.error('Database error checking family head:', err);
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+                    
+                    if (userFamilyHead) {
+                        console.log(`User ${interaction.user.id} sudah menjadi kepala keluarga.`);
+                        await interaction.editReply({
+                            content: 'Kamu sudah menjadi kepala dari sebuah keluarga. Tidak bisa bergabung ke keluarga lain sebagai anggota.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Check if user is already in a family using async method
+                    const userFamily = await new Promise((resolve, reject) => {
+                        db.get('SELECT * FROM family_members WHERE user_id = ?', [interaction.user.id], (err, row) => {
+                            if (err) {
+                                console.error('Database error checking family member:', err);
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+                    
+                    if (userFamily) {
+                        console.log(`User ${interaction.user.id} sudah menjadi anggota keluarga.`);
+                        await interaction.editReply({
+                            content: 'Kamu sudah menjadi anggota dari sebuah keluarga.',
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Check if the family exists in the database using async method
+                    const family = await new Promise((resolve, reject) => {
+                        db.get('SELECT * FROM families WHERE family_name = ?', [familyName], (err, row) => {
+                            if (err) {
+                                console.error('Database error checking family:', err);
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+
+                    if (!family) {
+                        console.log(`Keluarga dengan nama "${familyName}" tidak ditemukan.`);
+                        await interaction.editReply({
+                            content: `Keluarga dengan nama "${familyName}" tidak ditemukan.`,
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    console.log(`Keluarga ditemukan: ${family.family_name}, Owner ID: ${family.owner_id}`);
+
+                    // Check if user is already requesting to join this family using async method
+                    const existingRequest = await new Promise((resolve, reject) => {
+                        db.get('SELECT * FROM family_requests WHERE requester_id = ? AND family_id = ? AND status = ?', 
+                            [interaction.user.id, family.owner_id, 'PENDING'], (err, row) => {
+                            if (err) {
+                                console.error('Database error checking existing request:', err);
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+
+                    if (existingRequest) {
+                        console.log(`User ${interaction.user.id} sudah memiliki permintaan yang menunggu untuk keluarga ${familyName}`);
+                        await interaction.editReply({
+                            content: `Kamu sudah mengajukan permintaan untuk bergabung dengan keluarga "${familyName}". Mohon tunggu tanggapan dari kepala keluarga.`,
+                            flags: 64
+                        });
+                        return;
+                    }
+
+                    // Insert the join request into the family_requests table
+                    try {
+                        db.prepare('INSERT INTO family_requests (requester_id, family_id, reason) VALUES (?, ?, ?)').run(
+                            interaction.user.id,
+                            family.owner_id, // Using owner_id as family_id reference
+                            joinReason
+                        );
+
+                        console.log(`Permintaan bergabung disimpan untuk user ${interaction.user.id} ke keluarga ${familyName} (Owner: ${family.owner_id})`);
+
+                        await interaction.editReply({
+                            content: `Permintaanmu untuk bergabung dengan keluarga "${familyName}" telah dikirim ke kepala keluarga. Mohon tunggu tanggapan.`,
+                            flags: 64
+                        });
+
+                        // Notify the family head about the join request via DM
+                        try {
+                            console.log(`Mencoba mengambil data user kepala keluarga: ${family.owner_id}`);
+                            const familyHead = await interaction.client.users.fetch(family.owner_id);
+                            
+                            console.log(`Mencoba mengirim DM ke kepala keluarga: ${family.owner_id} (${familyHead.tag})`);
+                            
+                            // Create embed for the join request
+                            const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                            
+                            const requestEmbed = new EmbedBuilder()
+                                .setTitle('💌 Permintaan Bergabung Keluarga Baru')
+                                .setDescription(`Pengguna **${interaction.user.tag}** ingin bergabung dengan keluargamu "${familyName}".\n\n**Alasan bergabung:** ${joinReason}`)
+                                .setColor('#FFD700')
+                                .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+                                .setTimestamp();
+
+                            // Create buttons for approve and cancel
+                            const approveButton = new ButtonBuilder()
+                                .setLabel('Setujui')
+                                .setStyle(ButtonStyle.Success)
+                                .setCustomId(`btn_approve_join_request_${family.owner_id}_${interaction.user.id}`);
+
+                            const cancelButton = new ButtonBuilder()
+                                .setLabel('Tolak')
+                                .setStyle(ButtonStyle.Danger)
+                                .setCustomId(`btn_cancel_join_request_${family.owner_id}_${interaction.user.id}`);
+
+                            const row = new ActionRowBuilder().addComponents(approveButton, cancelButton);
+
+                            // Send DM to family head with the request and buttons
+                            await familyHead.send({ 
+                                embeds: [requestEmbed],
+                                components: [row]
+                            });
+                            
+                            console.log(`Berhasil mengirim DM ke kepala keluarga: ${family.owner_id} (${familyHead.tag})`);
+                        } catch (dmError) {
+                            console.error('Could not send DM to family head:', dmError);
+                            
+                            // Jika gagal mengirim ke kepala keluarga, kirim ke channel sebagai fallback
+                            try {
+                                const fallbackEmbed = new EmbedBuilder()
+                                    .setTitle('💌 Permintaan Bergabung Keluarga Baru')
+                                    .setDescription(`Pengguna **${interaction.user.tag}** ingin bergabung dengan keluargamu "${familyName}".\n\n**Alasan bergabung:** ${joinReason}\n\nCatatan: Tidak dapat mengirim DM ke kepala keluarga.`)
+                                    .setColor('#FFD700')
+                                    .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+                                    .setTimestamp();
+
+                                // Kirim ke channel tempat permintaan dibuat sebagai fallback
+                                await interaction.channel.send({ 
+                                    content: `<@${family.owner_id}>`, // Tag kepala keluarga
+                                    embeds: [fallbackEmbed] 
+                                });
+                                
+                                console.log(`DM ke kepala keluarga gagal, mengirim ke channel sebagai fallback`);
+                            } catch (fallbackError) {
+                                console.error('Fallback juga gagal:', fallbackError);
+                            }
+                        }
+                    } catch (requestError) {
+                        console.error('Error creating join request:', requestError);
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat membuat permintaan bergabung keluarga. Silakan coba lagi.',
+                            flags: 64
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error processing join family modal:', error);
+
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: '❌ Terjadi kesalahan saat mengajukan permintaan bergabung keluarga. Silakan coba lagi nanti.',
+                            flags: 64
+                        });
+                    } else {
+                        await interaction.editReply({
+                            content: '❌ Terjadi kesalahan saat mengajukan permintaan bergabung keluarga. Silakan coba lagi nanti.',
+                            flags: 64
+                        });
+                    }
+                }
+            }
             // Handle modal submission for new letter - UPDATED IMPLEMENTATION
             else if (interaction.customId && interaction.customId === 'modal_letter_submit') {
                 await interaction.deferReply({ flags: 64 });
@@ -2304,30 +2727,6 @@ module.exports = async (client, interaction) => {
                                 await interaction.editReply({ content: 'There was an error sending your letter. Please try again later.' });
                             }
                         }
-
-                        // NEW: ALSO send to the staff log channel (as requested in the original issue)
-                        const logChannelId = process.env.FEEDBACK_LOG_CHANNEL_ID;
-                        const logChannel = interaction.guild.channels.cache.get(logChannelId);
-
-                        if (logChannel) {
-                            try {
-                                // Create embed for staff log
-                                const logEmbed = new EmbedBuilder()
-                                    .setTitle('💌 Warkah Confession Baru')
-                                    .setColor('#FF69B4')
-                                    .setThumbnail(interaction.user.displayAvatarURL())
-                                    .addFields(
-                                        { name: '👤 Pengirim', value: `${interaction.user.tag}`, inline: true },
-                                        { name: '📝 Isi Pesan', value: `\`\`\`${inputContentValue}\`\`\`` }
-                                    )
-                                    .setTimestamp();
-
-                                await logChannel.send({ embeds: [logEmbed] });
-                            } catch (logError) {
-                                console.error('Error sending to log channel:', logError);
-                                // Don't fail the main operation if logging fails
-                            }
-                        }
                 } catch (error) {
                     console.error('Error processing letter submission:', error);
                     await interaction.editReply({ content: 'There was an error submitting your letter. Please try again later.' });
@@ -2446,30 +2845,6 @@ module.exports = async (client, interaction) => {
                             }
 
                             await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                            // ALSO send to the staff log channel
-                            const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                            if (logChannel) {
-                                try {
-                                    const logEmbed = new EmbedBuilder()
-                                        .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                        .setColor('#811331')
-                                        .setThumbnail(interaction.user.displayAvatarURL())
-                                        .setDescription(replyContent)
-                                        .addFields(
-                                            { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                            { name: '📅 Status', value: 'Terkirim', inline: true },
-                                            { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                        )
-                                        .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                        .setTimestamp();
-
-                                    await logChannel.send({ embeds: [logEmbed] });
-                                } catch (logError) {
-                                    console.error('Error sending to log channel:', logError);
-                                    // Don't fail the main operation if logging fails
-                                }
-                            }
                         } else {
                             // If we can't find the original message, send to the main channel
                             const replyEmbed = new EmbedBuilder()
@@ -2553,30 +2928,6 @@ module.exports = async (client, interaction) => {
                             }
 
                             await interaction.editReply({ content: `Balasan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                            // ALSO send to the staff log channel
-                            const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                            if (logChannel) {
-                                try {
-                                    const logEmbed = new EmbedBuilder()
-                                        .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                        .setColor('#811331')
-                                        .setThumbnail(interaction.user.displayAvatarURL())
-                                        .setDescription(replyContent)
-                                        .addFields(
-                                            { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                            { name: '📅 Status', value: 'Terkirim', inline: true },
-                                            { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                        )
-                                        .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                        .setTimestamp();
-
-                                    await logChannel.send({ embeds: [logEmbed] });
-                                } catch (logError) {
-                                    console.error('Error sending to log channel:', logError);
-                                    // Don't fail the main operation if logging fails
-                                }
-                            }
                         }
                     } catch (error) {
                         console.error('Error sending reply:', error);
@@ -2697,30 +3048,6 @@ module.exports = async (client, interaction) => {
                                 }
 
                                 await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                // ALSO send to the staff log channel
-                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                if (logChannel) {
-                                    try {
-                                        const logEmbed = new EmbedBuilder()
-                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                            .setColor('#811331')
-                                            .setThumbnail(interaction.user.displayAvatarURL())
-                                            .setDescription(replyContent)
-                                            .addFields(
-                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                            )
-                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                            .setTimestamp();
-
-                                        await logChannel.send({ embeds: [logEmbed] });
-                                    } catch (logError) {
-                                        console.error('Error sending to log channel:', logError);
-                                        // Don't fail the main operation if logging fails
-                                    }
-                                }
                             } else {
                                 // If no thread exists, create one
                                 let thread;
@@ -2798,30 +3125,6 @@ module.exports = async (client, interaction) => {
                                     }
 
                                     await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                    // ALSO send to the staff log channel
-                                    const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                    if (logChannel) {
-                                        try {
-                                            const logEmbed = new EmbedBuilder()
-                                                .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                                .setColor('#811331')
-                                                .setThumbnail(interaction.user.displayAvatarURL())
-                                                .setDescription(replyContent)
-                                                .addFields(
-                                                    { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                    { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                    { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                                )
-                                                .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                                .setTimestamp();
-
-                                            await logChannel.send({ embeds: [logEmbed] });
-                                        } catch (logError) {
-                                            console.error('Error sending to log channel:', logError);
-                                            // Don't fail the main operation if logging fails
-                                        }
-                                    }
                                     return;
                                 }
 
@@ -2861,30 +3164,6 @@ module.exports = async (client, interaction) => {
                                 }
 
                                 await interaction.editReply({ content: `Balasan lanjutan telah dikirim sebagai **${replyDisplayName}**! ✨`, flags: 64 });
-
-                                // ALSO send to the staff log channel
-                                const logChannel = interaction.guild.channels.cache.get(process.env.FEEDBACK_LOG_CHANNEL_ID);
-                                if (logChannel) {
-                                    try {
-                                        const logEmbed = new EmbedBuilder()
-                                            .setTitle(`✉️ Balasan untuk Surat #${letterId}`)
-                                            .setColor('#811331')
-                                            .setThumbnail(interaction.user.displayAvatarURL())
-                                            .setDescription(replyContent)
-                                            .addFields(
-                                                { name: '✍️ Dari', value: replyDisplayName, inline: true },
-                                                { name: '📅 Status', value: 'Terkirim', inline: true },
-                                                { name: '🆔 Surat Tujuan', value: `#${letterId}`, inline: true }
-                                            )
-                                            .setFooter({ text: `Original Sender ID: ${interaction.user.id}` }) // Tetap simpan ID asli di footer kecil buat admin
-                                            .setTimestamp();
-
-                                        await logChannel.send({ embeds: [logEmbed] });
-                                    } catch (logError) {
-                                        console.error('Error sending to log channel:', logError);
-                                        // Don't fail the main operation if logging fails
-                                    }
-                                }
                             }
                         } catch (error) {
                             console.error('Error sending additional reply:', error);
@@ -3197,6 +3476,19 @@ module.exports = async (client, interaction) => {
                 // Add the new role to the user who created the family
                 await member.roles.add(newRole);
 
+                // Create a role for family members with the same name as the family
+                try {
+                    const familyMemberRole = await guild.roles.create({
+                        name: familyName, // This will be the general family role for all members
+                        color: '#FFB6C1', // Light pink color for family members
+                        reason: `Created for family ${familyName} members by ${interaction.user.tag}`
+                    });
+                    
+                    console.log(`Role "${familyName}" created for family members`);
+                } catch (roleError) {
+                    console.error(`Error creating family member role "${familyName}":`, roleError);
+                }
+
                 // Send notification to admin channel instead of creating a family channel
                 const adminChannelId = process.env.ADMIN_NOTIFICATION_CHANNEL_ID || process.env.STAFF_CHANNEL_ID;
                 if (adminChannelId) {
@@ -3269,97 +3561,472 @@ module.exports = async (client, interaction) => {
                 }
             }
         }
-        // Handle Join Family modal submission
-        else if (interaction.customId === 'modal_join_family') {
-            await interaction.deferReply({ flags: 64 }); // Using flags instead of ephemeral
-
+        // Handle Claim Reward modal submission
+        else if (interaction.customId === 'modal_claim_reward') {
             try {
+                await interaction.deferReply({ flags: 64 }); // Using flags for ephemeral response
+
+                // Get the claim description from the modal
+                const claimDescription = interaction.fields.getTextInputValue('claim_input');
+
+                // Check if user is authorized to use this feature
+                const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                    Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                        process.env.CLIENT_OWNER_ID :
+                        process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                    : [];
+
+                if (!authorizedIds.includes(interaction.user.id)) {
+                    await interaction.editReply({
+                        content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                        flags: 64
+                    });
+                    return;
+                }
+
                 // Get the database connection
                 const { db } = require('../database/db');
 
-                // Get values from modal
-                const familyName = interaction.fields.getTextInputValue('join_family_name');
-                const joinReason = interaction.fields.getTextInputValue('join_reason');
+                // Insert the claim into the database
+                const insertClaim = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `
+                            INSERT INTO claims (user_id, description, status)
+                            VALUES (?, ?, ?)
+                        `;
+                        db.run(query, [interaction.user.id, claimDescription, 'PENDING'], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.lastID); // Get the inserted claim ID
+                            }
+                        });
+                    });
+                };
 
-                // Check if the family exists in the database
-                const family = db.prepare('SELECT * FROM families WHERE family_name = ?').get(familyName);
-
-                if (!family) {
+                let claimId;
+                try {
+                    claimId = await insertClaim();
+                } catch (dbError) {
+                    console.error('Database error inserting claim:', dbError);
                     await interaction.editReply({
-                        content: `Keluarga dengan nama "${familyName}" tidak ditemukan.`,
+                        content: 'Terjadi kesalahan saat menyimpan klaim. Silakan coba lagi.',
                         flags: 64
                     });
                     return;
                 }
 
-                // Check if user is already in a family
-                const userFamily = db.prepare('SELECT * FROM family_members WHERE user_id = ?').get(interaction.user.id);
-                
-                if (userFamily) {
+                // Get the claim log channel from environment variable
+                const claimChannelId = process.env.CLAIM_LOG_CHANNEL_ID;
+                if (!claimChannelId) {
                     await interaction.editReply({
-                        content: 'Kamu sudah menjadi anggota dari sebuah keluarga.',
+                        content: 'Channel klaim belum dikonfigurasi. Silakan hubungi administrator.',
                         flags: 64
                     });
                     return;
+                }
+
+                const claimChannel = interaction.guild.channels.cache.get(claimChannelId);
+                if (!claimChannel) {
+                    await interaction.editReply({
+                        content: 'Channel klaim tidak ditemukan. Silakan hubungi administrator.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Create embed for the claim
+                const { EmbedBuilder } = require('discord.js');
+                const claimEmbed = new EmbedBuilder()
+                    .setTitle(`🎁 Permintaan Klaim Baru #${claimId}`)
+                    .setDescription(claimDescription)
+                    .setColor('#FFD700')
+                    .addFields(
+                        { name: 'Diklaim oleh', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+                        { name: 'Status', value: 'PENDING', inline: true },
+                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                    )
+                    .setTimestamp();
+
+                // Create buttons for admin actions
+                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+                const approveButton = new ButtonBuilder()
+                    .setLabel('Approve')
+                    .setStyle(ButtonStyle.Success)
+                    .setCustomId(`btn_approve_claim_${claimId}`);
+
+                const rejectButton = new ButtonBuilder()
+                    .setLabel('Reject')
+                    .setStyle(ButtonStyle.Danger)
+                    .setCustomId(`btn_reject_claim_${claimId}`);
+
+                const row = new ActionRowBuilder().addComponents(approveButton, rejectButton);
+
+                // Send the claim to the claim log channel
+                const sentMessage = await claimChannel.send({ embeds: [claimEmbed], components: [row] });
+
+                // Confirm to the user
+                await interaction.editReply({
+                    content: `Permintaan klaimmu telah dikirim dengan ID #${claimId} dan sedang diproses. Terima kasih!`,
+                    flags: 64
+                });
+            } catch (error) {
+                console.error('Error processing claim modal:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    try {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat memproses klaimmu. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    } catch (replyError) {
+                        console.error('Failed to send error message:', replyError);
+                    }
+                } else {
+                    try {
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat memproses klaimmu. Silakan coba lagi.',
+                            flags: 64
+                        });
+                    } catch (editError) {
+                        console.error('Failed to edit reply after error:', editError);
+                    }
+                }
+            }
+        }
+        // Handle Approve Join Request button click
+        else if (interaction.customId && interaction.customId.startsWith('btn_approve_join_request_')) {
+            try {
+                // Extract family head ID and requester ID from custom ID
+                // Format: btn_approve_join_request_{familyHeadId}_{requesterId}
+                const parts = interaction.customId.split('_');
+                if (parts.length < 5) {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Format ID permintaan tidak valid.',
+                            ephemeral: true
+                        });
+                    }
+                    return;
+                }
+
+                const familyHeadId = parts[4]; // family head ID
+                const requesterId = parts[5]; // requester ID
+
+                // Verify that the person clicking is indeed the family head
+                if (interaction.user.id !== familyHeadId) {
+                    await interaction.reply({
+                        content: 'Hanya kepala keluarga yang dapat menyetujui permintaan ini.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Get the family info using async method
+                const family = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM families WHERE owner_id = ?', [familyHeadId], (err, row) => {
+                        if (err) {
+                            console.error('Database error getting family:', err);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
+                    });
+                });
+                
+                if (!family) {
+                    await interaction.reply({
+                        content: 'Keluarga tidak ditemukan.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Get the request info using async method
+                const request = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM family_requests WHERE requester_id = ? AND family_id = ? AND status = ?', 
+                        [requesterId, familyHeadId, 'PENDING'], (err, row) => {
+                        if (err) {
+                            console.error('Database error getting request:', err);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
+                    });
+                });
+                
+                if (!request) {
+                    await interaction.reply({
+                        content: 'Permintaan tidak ditemukan atau sudah diproses.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Update the request status to APPROVED using async method
+                await new Promise((resolve, reject) => {
+                    db.run('UPDATE family_requests SET status = ? WHERE requester_id = ? AND family_id = ?', 
+                        ['APPROVED', requesterId, familyHeadId], (err) => {
+                        if (err) {
+                            console.error('Database error updating request:', err);
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+
+                // Add the user to the family_members table using async method
+                try {
+                    await new Promise((resolve, reject) => {
+                        db.run('INSERT INTO family_members (user_id, family_id, join_date) VALUES (?, ?, ?)', 
+                            [requesterId, familyHeadId, new Date().toISOString()], (err) => {
+                            if (err) {
+                                // If user is already in the family, continue anyway
+                                if (err.errno !== 19) { // SQLITE_CONSTRAINT error code
+                                    reject(err);
+                                } else {
+                                    resolve();
+                                }
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                } catch (insertError) {
+                    console.error('Error inserting to family_members:', insertError);
                 }
 
                 // Get the guild and member
-                const guild = interaction.guild;
-                const member = interaction.member;
+                // Since interaction happens in DM, interaction.guild is null
+                // So we need to get the guild from the client
+                const guild = interaction.client.guilds.cache.get(interaction.guildId) || 
+                             interaction.client.guilds.cache.first(); // fallback to first guild if needed
+                if (!guild) {
+                    await interaction.reply({
+                        content: 'Server tidak ditemukan. Tidak dapat menyelesaikan permintaan.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                
+                let member;
+                try {
+                    member = await guild.members.fetch(requesterId);
+                } catch (memberFetchError) {
+                    // If member is not in the guild, fetch the user instead
+                    if (memberFetchError.code === 10007) { // Unknown Member
+                        console.log(`User ${requesterId} tidak ditemukan di guild, mengambil data user biasa`);
+                        member = await interaction.client.users.fetch(requesterId);
+                    } else {
+                        throw memberFetchError; // Re-throw if it's a different error
+                    }
+                }
 
                 // Find the family role by name
-                const familyRole = guild.roles.cache.find(role => role.name === familyName);
+                if (family && family.family_name) {
+                    // Refresh the guild roles cache to ensure we have the latest roles
+                    await guild.roles.fetch();
+                    
+                    const familyRole = guild.roles.cache.find(role => role.name === family.family_name);
 
-                if (!familyRole) {
-                    await interaction.editReply({
-                        content: `Role keluarga "${familyName}" tidak ditemukan. Silakan hubungi administrator.`,
-                        flags: 64
+                    if (familyRole) {
+                        try {
+                            // Only add role if member is actually a guild member
+                            if (member && member.joinedAt) {
+                                await member.roles.add(familyRole);
+                            } else {
+                                console.log(`User ${requesterId} bukan anggota guild, tidak bisa menambahkan role`);
+                            }
+                        } catch (roleError) {
+                            console.error('Error adding family role to user:', roleError);
+                        }
+                    } else {
+                        console.error(`Family role "${family.family_name}" not found`);
+                        console.log('Available roles:', guild.roles.cache.map(role => role.name).join(', '));
+                    }
+                } else {
+                    console.error('Family data or family name is undefined');
+                }
+
+                // Update the embed to show approved status
+                const { EmbedBuilder } = require('discord.js');
+                
+                // Handle both user and member objects for tag and avatar
+                let requesterTag, requesterAvatar;
+                
+                if (member) {
+                    requesterTag = member.tag || member.username || 'Unknown User';
+                    requesterAvatar = member.displayAvatarURL ? member.displayAvatarURL({ dynamic: true }) : 
+                                     member.avatarURL ? member.avatarURL({ dynamic: true }) : 
+                                     'https://cdn.discordapp.com/embed/avatars/0.png'; // Default avatar
+                } else {
+                    requesterTag = 'Unknown User';
+                    requesterAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png'; // Default avatar
+                }
+                
+                const updatedEmbed = new EmbedBuilder()
+                    .setTitle(`💌 Permintaan Bergabung Keluarga - DISETUJUI`)
+                    .setDescription(`Pengguna **${requesterTag}** ingin bergabung dengan keluargamu "${family.family_name}".\n\n**Alasan bergabung:** ${request.reason}`)
+                    .setColor('#00FF00') // Green color for approved
+                    .setThumbnail(requesterAvatar)
+                    .addFields(
+                        { name: 'Status', value: 'DISETUJUI', inline: true },
+                        { name: 'Disetujui oleh', value: interaction.user.tag, inline: true },
+                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                    )
+                    .setTimestamp();
+
+                // Remove the buttons
+                await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+                // Send success message to family head
+                await interaction.followUp({
+                    content: `Permintaan dari **${requesterTag}** untuk bergabung dengan keluarga "${family.family_name}" telah disetujui.`,
+                    ephemeral: true
+                });
+
+                // Notify the requester that their request was approved
+                try {
+                    const requester = await interaction.client.users.fetch(requesterId);
+                    await requester.send(`🎉 Permintaanmu untuk bergabung dengan keluarga "${family.family_name}" telah **disetujui** oleh kepala keluarga! Selamat datang di keluargamu yang baru!`);
+                } catch (dmError) {
+                    console.error('Could not send DM to requester:', dmError);
+                }
+            } catch (error) {
+                console.error('Error handling approve join request button:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat menyetujui permintaan bergabung keluarga. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+        // Handle Cancel Join Request button click
+        else if (interaction.customId && interaction.customId.startsWith('btn_cancel_join_request_')) {
+            try {
+                // Extract family head ID and requester ID from custom ID
+                // Format: btn_cancel_join_request_{familyHeadId}_{requesterId}
+                const parts = interaction.customId.split('_');
+                if (parts.length < 5) {
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Format ID permintaan tidak valid.',
+                            ephemeral: true
+                        });
+                    }
+                    return;
+                }
+
+                const familyHeadId = parts[4]; // family head ID
+                const requesterId = parts[5]; // requester ID
+
+                // Verify that the person clicking is indeed the family head
+                if (interaction.user.id !== familyHeadId) {
+                    await interaction.reply({
+                        content: 'Hanya kepala keluarga yang dapat menolak permintaan ini.',
+                        ephemeral: true
                     });
                     return;
                 }
 
-                // Add the family role to the user
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Get the family info using async method
+                const family = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM families WHERE owner_id = ?', [familyHeadId], (err, row) => {
+                        if (err) {
+                            console.error('Database error getting family:', err);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
+                    });
+                });
+                
+                if (!family) {
+                    await interaction.reply({
+                        content: 'Keluarga tidak ditemukan.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Get the request info using async method
+                const request = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM family_requests WHERE requester_id = ? AND family_id = ? AND status = ?', 
+                        [requesterId, familyHeadId, 'PENDING'], (err, row) => {
+                        if (err) {
+                            console.error('Database error getting request:', err);
+                            reject(err);
+                        } else {
+                            resolve(row);
+                        }
+                    });
+                });
+                
+                if (!request) {
+                    await interaction.reply({
+                        content: 'Permintaan tidak ditemukan atau sudah diproses.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Update the request status to REJECTED using async method
+                await new Promise((resolve, reject) => {
+                    db.run('UPDATE family_requests SET status = ? WHERE requester_id = ? AND family_id = ?', 
+                        ['REJECTED', requesterId, familyHeadId], (err) => {
+                        if (err) {
+                            console.error('Database error updating request:', err);
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+
+                // Update the embed to show rejected status
+                const { EmbedBuilder } = require('discord.js');
+                const updatedEmbed = new EmbedBuilder()
+                    .setTitle(`💌 Permintaan Bergabung Keluarga - DITOLAK`)
+                    .setDescription(`Pengguna **${interaction.user.tag}** ingin bergabung dengan keluargamu "${family.family_name}".\n\n**Alasan bergabung:** ${request.reason}`)
+                    .setColor('#FF0000') // Red color for rejected
+                    .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+                    .addFields(
+                        { name: 'Status', value: 'DITOLAK', inline: true },
+                        { name: 'Ditolak oleh', value: interaction.user.tag, inline: true },
+                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                    )
+                    .setTimestamp();
+
+                // Remove the buttons
+                await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+                // Send success message to family head
+                await interaction.followUp({
+                    content: `Permintaan dari **${interaction.user.tag}** untuk bergabung dengan keluarga "${family.family_name}" telah ditolak.`,
+                    ephemeral: true
+                });
+
+                // Notify the requester that their request was rejected
                 try {
-                    await member.roles.add(familyRole);
-                    
-                    // Add the user to the family_members table
-                    db.prepare('INSERT INTO family_members (user_id, family_id, join_date) VALUES (?, ?, ?)').run(
-                        interaction.user.id,
-                        family.owner_id, // Using owner_id as family_id reference
-                        new Date().toISOString()
-                    );
-                    
-                    await interaction.editReply({
-                        content: `Selamat! Kamu telah bergabung dengan keluarga "${familyName}". Role keluarga telah ditambahkan ke akunmu.`,
-                        flags: 64
-                    });
-                    
-                    // Optionally, notify the family head about the new member
-                    try {
-                        const familyHead = await interaction.client.users.fetch(family.owner_id);
-                        await familyHead.send(`Pengguna ${interaction.user.tag} telah bergabung dengan keluargamu "${familyName}".`);
-                    } catch (dmError) {
-                        console.error('Could not send DM to family head:', dmError);
-                    }
-                } catch (roleError) {
-                    console.error('Error adding role to user:', roleError);
-                    await interaction.editReply({
-                        content: 'Terjadi kesalahan saat menambahkan role keluarga. Silakan hubungi administrator.',
-                        flags: 64
-                    });
+                    const requester = await interaction.client.users.fetch(requesterId);
+                    await requester.send(`😔 Permintaanmu untuk bergabung dengan keluarga "${family.family_name}" telah **ditolak** oleh kepala keluarga.`);
+                } catch (dmError) {
+                    console.error('Could not send DM to requester:', dmError);
                 }
             } catch (error) {
-                console.error('Error processing join family modal:', error);
-
+                console.error('Error handling cancel join request button:', error);
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
-                        content: '❌ Terjadi kesalahan saat bergabung dengan keluarga. Silakan coba lagi nanti.',
-                        flags: 64
-                    });
-                } else {
-                    await interaction.editReply({
-                        content: '❌ Terjadi kesalahan saat bergabung dengan keluarga. Silakan coba lagi nanti.',
-                        flags: 64
+                        content: 'Terjadi kesalahan saat menolak permintaan bergabung keluarga. Silakan coba lagi.',
+                        ephemeral: true
                     });
                 }
             }

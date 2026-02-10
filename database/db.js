@@ -74,7 +74,7 @@ function runMigrations() {
         }
 
         const logoUrlExists = columns.some(col => col.name === 'logo_url');
-        
+
         if (!logoUrlExists) {
             // Add logo_url column
             db.run("ALTER TABLE families ADD COLUMN logo_url TEXT", (err) => {
@@ -84,6 +84,67 @@ function runMigrations() {
                     console.log('Added logo_url column to families table');
                 }
             });
+        }
+    });
+
+    // Create claims table if it doesn't exist
+    const createClaimsTableSQL = `
+        CREATE TABLE IF NOT EXISTS claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            description TEXT NOT NULL,
+            proof_url TEXT,
+            status TEXT DEFAULT 'PENDING',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+
+    db.run(createClaimsTableSQL, (err) => {
+        if (err) {
+            console.error('Error creating claims table:', err);
+        } else {
+            console.log('Claims table ensured');
+        }
+    });
+
+    // Create family_requests table if it doesn't exist
+    const createFamilyRequestsTableSQL = `
+        CREATE TABLE IF NOT EXISTS family_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requester_id TEXT NOT NULL,
+            family_id TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT DEFAULT 'PENDING',
+            request_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (family_id) REFERENCES families(owner_id)
+        )
+    `;
+
+    db.run(createFamilyRequestsTableSQL, (err) => {
+        if (err) {
+            console.error('Error creating family_requests table:', err);
+        } else {
+            console.log('Family requests table ensured');
+        }
+    });
+
+    // Create auto_panels table if it doesn't exist
+    const createAutoPanelsTableSQL = `
+        CREATE TABLE IF NOT EXISTS auto_panels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            panel_type TEXT NOT NULL UNIQUE,
+            message_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+
+    db.run(createAutoPanelsTableSQL, (err) => {
+        if (err) {
+            console.error('Error creating auto_panels table:', err);
+        } else {
+            console.log('Auto panels table ensured');
         }
     });
 }

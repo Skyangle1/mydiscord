@@ -24,9 +24,10 @@ module.exports = {
 
         try {
             // Get the daily quote channel from environment variable
-            const dailyQuoteChannelId = process.env.DAILY_QUOTE_CHANNEL_ID;
+            const dailyQuoteChannelIds = process.env.DAILY_QUOTE_CHANNEL_ID ?
+                process.env.DAILY_QUOTE_CHANNEL_ID.split(',').map(id => id.trim()) : [];
 
-            if (!dailyQuoteChannelId) {
+            if (!dailyQuoteChannelIds || dailyQuoteChannelIds.length === 0) {
                 await interaction.editReply({
                     content: 'Daily quote channel has not been configured. Please set DAILY_QUOTE_CHANNEL_ID in the .env file.',
                     ephemeral: true
@@ -34,11 +35,14 @@ module.exports = {
                 return;
             }
 
-            const dailyQuoteChannel = interaction.client.channels.cache.get(dailyQuoteChannelId);
+            // Check if any of the channels exist
+            const validChannels = dailyQuoteChannelIds
+                .map(id => interaction.client.channels.cache.get(id))
+                .filter(channel => channel !== undefined);
 
-            if (!dailyQuoteChannel) {
+            if (validChannels.length === 0) {
                 await interaction.editReply({
-                    content: `Daily quote channel (ID: ${dailyQuoteChannelId}) could not be found. Please verify the channel ID is correct.`,
+                    content: `Daily quote channels could not be found. Please verify the channel IDs in DAILY_QUOTE_CHANNEL_ID are correct.`,
                     ephemeral: true
                 });
                 return;
@@ -67,11 +71,15 @@ module.exports = {
                     .setColor('#FF69B4')
                     .setTimestamp();
 
-                // Send the quote to the target channel (no buttons)
-                await dailyQuoteChannel.send({ embeds: [embed] });
+                // Send the quote to all valid channels
+                const channelNames = [];
+                for (const channel of validChannels) {
+                    await channel.send({ embeds: [embed] });
+                    channelNames.push(channel.toString());
+                }
 
                 await interaction.editReply({
-                    content: `Daily love quote has been sent successfully to ${dailyQuoteChannel.toString()}.`,
+                    content: `Daily love quote has been sent successfully to ${channelNames.join(', ')}.`,
                     ephemeral: true
                 });
             } catch (apiError) {
@@ -84,11 +92,15 @@ module.exports = {
                     .setColor('#FF69B4')
                     .setTimestamp();
 
-                // Send the quote to the target channel (no buttons)
-                await dailyQuoteChannel.send({ embeds: [embed] });
+                // Send the quote to all valid channels
+                const channelNames = [];
+                for (const channel of validChannels) {
+                    await channel.send({ embeds: [embed] });
+                    channelNames.push(channel.toString());
+                }
 
                 await interaction.editReply({
-                    content: `Daily love quote has been sent successfully to ${dailyQuoteChannel.toString()}. (Note: Groq API failed, using default message)`,
+                    content: `Daily love quote has been sent successfully to ${channelNames.join(', ')}. (Note: Groq API failed, using default message)`,
                     ephemeral: true
                 });
             }
