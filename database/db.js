@@ -95,7 +95,12 @@ function runMigrations() {
             description TEXT NOT NULL,
             proof_url TEXT,
             status TEXT DEFAULT 'PENDING',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            wallet_number TEXT,
+            address TEXT,
+            reward_amount TEXT,
+            channel_id TEXT,
+            thread_id TEXT
         )
     `;
 
@@ -104,6 +109,75 @@ function runMigrations() {
             console.error('Error creating claims table:', err);
         } else {
             console.log('Claims table ensured');
+        }
+    });
+    
+    // Check if wallet_number column exists in claims table
+    db.all("PRAGMA table_info(claims)", [], (err, columns) => {
+        if (err) {
+            console.error('Error getting column info for claims:', err);
+            return;
+        }
+
+        const walletNumberExists = columns.some(col => col.name === 'wallet_number');
+        const addressExists = columns.some(col => col.name === 'address');
+        const rewardAmountExists = columns.some(col => col.name === 'reward_amount');
+        const channelIdExists = columns.some(col => col.name === 'channel_id');
+        const threadIdExists = columns.some(col => col.name === 'thread_id');
+
+        if (!walletNumberExists) {
+            // Add wallet_number column
+            db.run("ALTER TABLE claims ADD COLUMN wallet_number TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding wallet_number column:', err);
+                } else {
+                    console.log('Added wallet_number column to claims table');
+                }
+            });
+        }
+        
+        if (!addressExists) {
+            // Add address column
+            db.run("ALTER TABLE claims ADD COLUMN address TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding address column:', err);
+                } else {
+                    console.log('Added address column to claims table');
+                }
+            });
+        }
+        
+        if (!rewardAmountExists) {
+            // Add reward_amount column
+            db.run("ALTER TABLE claims ADD COLUMN reward_amount TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding reward_amount column:', err);
+                } else {
+                    console.log('Added reward_amount column to claims table');
+                }
+            });
+        }
+        
+        if (!channelIdExists) {
+            // Add channel_id column
+            db.run("ALTER TABLE claims ADD COLUMN channel_id TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding channel_id column:', err);
+                } else {
+                    console.log('Added channel_id column to claims table');
+                }
+            });
+        }
+        
+        if (!threadIdExists) {
+            // Add thread_id column
+            db.run("ALTER TABLE claims ADD COLUMN thread_id TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding thread_id column:', err);
+                } else {
+                    console.log('Added thread_id column to claims table');
+                }
+            });
         }
     });
 

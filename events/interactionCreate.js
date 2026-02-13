@@ -664,52 +664,6 @@ module.exports = async (client, interaction) => {
                     }
                 }
             }
-            // Handle Claim button click
-            else if (interaction.customId === 'btn_open_claim') {
-                try {
-                    // Check if user is authorized to use this feature
-                    const authorizedIds = process.env.CLIENT_OWNER_ID ?
-                        Array.isArray(process.env.CLIENT_OWNER_ID) ?
-                            process.env.CLIENT_OWNER_ID :
-                            process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
-                        : [];
-
-                    if (!authorizedIds.includes(interaction.user.id)) {
-                        return await interaction.reply({
-                            content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
-                            ephemeral: true
-                        });
-                    }
-
-                    // Show a modal for claiming rewards
-                    const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
-
-                    const claimModal = new ModalBuilder()
-                        .setCustomId('modal_claim_reward')
-                        .setTitle('Claim Reward');
-
-                    // Input for claim reason/description
-                    const claimInput = new TextInputBuilder()
-                        .setCustomId('claim_input')
-                        .setLabel('Deskripsi Klaim')
-                        .setPlaceholder('Jelaskan reward apa yang ingin kamu klaim...')
-                        .setStyle(TextInputStyle.Paragraph)
-                        .setRequired(true);
-
-                    const actionRow = new ActionRowBuilder().addComponents(claimInput);
-                    claimModal.addComponents(actionRow);
-
-                    await interaction.showModal(claimModal);
-                } catch (error) {
-                    console.error('Error handling claim button:', error);
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: 'Terjadi kesalahan saat membuka form klaim. Silakan coba lagi.',
-                            ephemeral: true
-                        });
-                    }
-                }
-            }
             // Handle Approve Claim button click
             else if (interaction.customId && interaction.customId.startsWith('btn_approve_claim_')) {
                 try {
@@ -757,10 +711,10 @@ module.exports = async (client, interaction) => {
                             return;
                         }
 
-                        // Get the user who made the claim
-                        const getUserClaim = () => {
+                        // Get the user who made the claim and additional details
+                        const getClaimDetails = () => {
                             return new Promise((resolve, reject) => {
-                                const query = `SELECT user_id FROM claims WHERE id = ?`;
+                                const query = `SELECT user_id, description, wallet_number, address, reward_amount FROM claims WHERE id = ?`;
                                 db.get(query, [claimId], (err, row) => {
                                     if (err) {
                                         reject(err);
@@ -771,27 +725,17 @@ module.exports = async (client, interaction) => {
                             });
                         };
 
-                        const claimData = await getUserClaim();
-                        if (claimData) {
-                            try {
-                                // Send DM to the user who made the claim
-                                const user = await interaction.client.users.fetch(claimData.user_id);
-                                await user.send(`🎉 Klaimmu dengan ID #${claimId} telah DISETUJUI oleh admin. Terima kasih!`);
-                            } catch (dmError) {
-                                console.error('Could not send DM to user:', dmError.message);
-                            }
-                        }
-
                         // Update the embed to show approved status
                         const { EmbedBuilder } = require('discord.js');
+                        const originalEmbed = interaction.message.embeds[0];
                         const updatedEmbed = new EmbedBuilder()
-                            .setTitle(`🎁 Klaim #${claimId} - DISETUJUI`)
-                            .setDescription(interaction.message.embeds[0].data.description)
+                            .setTitle(`🎫 Tiket Klaim #${claimId} - DISETUJUI`)
+                            .setDescription(originalEmbed.data.description || ' ')
                             .setColor('#00FF00') // Green color for approved
                             .addFields(
-                                { name: 'Diklaim oleh', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Diklaim oleh').value, inline: true },
+                                { name: 'Dibuat oleh', value: originalEmbed.data.fields.find(f => f.name === 'Dibuat oleh')?.value || 'Unknown', inline: true },
                                 { name: 'Status', value: 'DISETUJUI', inline: true },
-                                { name: 'Tanggal', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Tanggal').value, inline: true },
+                                { name: 'Tanggal', value: originalEmbed.data.fields.find(f => f.name === 'Tanggal')?.value || new Date().toLocaleString('id-ID'), inline: true },
                                 { name: 'Disetujui oleh', value: interaction.user.tag, inline: false }
                             )
                             .setTimestamp();
@@ -801,9 +745,53 @@ module.exports = async (client, interaction) => {
 
                         // Send success message to admin
                         await interaction.followUp({
-                            content: `Klaim #${claimId} telah disetujui.`,
+                            content: `Tiket klaim #${claimId} telah disetujui.`,
                             ephemeral: true
                         });
+
+                        // Get the claim details to include in the message
+                        const getClaimDetailsForApproval = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `SELECT user_id, description, wallet_number, address, reward_amount FROM claims WHERE id = ?`;
+                                db.get(query, [claimId], (err, row) => {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve(row);
+                                    }
+                                });
+                            });
+                        };
+
+                        const claimDetails = await getClaimDetailsForApproval();
+                        
+                        // Send detailed approval information in the thread
+                        try {
+                            const originalMessage = interaction.message;
+                            let thread = originalMessage.thread;
+                            
+                            if (thread) {
+                                // Send detailed approval information in the existing thread
+                                const detailedApprovalMessage = `🎉 **TIKET DISETUJUI** 🎉\n\n` +
+                                    `**Nama Penerima:** <@${claimDetails.user_id}>\n` +
+                                    `**Kategori Pemenang:** ${claimDetails.description?.substring(0, 50) + '...' || 'Tidak ada deskripsi'}\n` +
+                                    `**Total Hadiah:** ${claimDetails.reward_amount || 'Menunggu konfirmasi'}\n` +
+                                    `**Nomor E-Wallet:** ${claimDetails.wallet_number || 'Belum diisi'}\n` +
+                                    `**Alamat Lengkap:** ${claimDetails.address || 'Tidak disediakan (Privasi)'}\n\n` +
+                                    `Tiket klaim telah disetujui oleh ${interaction.user.tag}.`;
+                                    
+                                await thread.send({
+                                    content: detailedApprovalMessage
+                                });
+                                
+                                // Send a private notification to the user in the thread
+                                await thread.send({
+                                    content: `<@${claimDetails.user_id}> Tiket klaimmu telah disetujui. Silakan dicek informasi lebih lanjut di sini.`
+                                });
+                            }
+                        } catch (threadError) {
+                            console.error('Error sending to thread for claim approval:', threadError);
+                        }
                     } catch (dbError) {
                         console.error('Database error updating claim:', dbError);
                         await interaction.reply({
@@ -868,10 +856,10 @@ module.exports = async (client, interaction) => {
                             return;
                         }
 
-                        // Get the user who made the claim
-                        const getUserClaim = () => {
+                        // Get the user who made the claim and additional details
+                        const getClaimDetails = () => {
                             return new Promise((resolve, reject) => {
-                                const query = `SELECT user_id FROM claims WHERE id = ?`;
+                                const query = `SELECT user_id, description, wallet_number, address, reward_amount FROM claims WHERE id = ?`;
                                 db.get(query, [claimId], (err, row) => {
                                     if (err) {
                                         reject(err);
@@ -882,27 +870,17 @@ module.exports = async (client, interaction) => {
                             });
                         };
 
-                        const claimData = await getUserClaim();
-                        if (claimData) {
-                            try {
-                                // Send DM to the user who made the claim
-                                const user = await interaction.client.users.fetch(claimData.user_id);
-                                await user.send(`⚠️ Klaimmu dengan ID #${claimId} telah DITOLAK oleh admin.`);
-                            } catch (dmError) {
-                                console.error('Could not send DM to user:', dmError.message);
-                            }
-                        }
-
                         // Update the embed to show rejected status
                         const { EmbedBuilder } = require('discord.js');
+                        const originalEmbed = interaction.message.embeds[0];
                         const updatedEmbed = new EmbedBuilder()
-                            .setTitle(`🎁 Klaim #${claimId} - DITOLAK`)
-                            .setDescription(interaction.message.embeds[0].data.description)
+                            .setTitle(`🎫 Tiket Klaim #${claimId} - DITOLAK`)
+                            .setDescription(originalEmbed.data.description || ' ')
                             .setColor('#FF0000') // Red color for rejected
                             .addFields(
-                                { name: 'Diklaim oleh', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Diklaim oleh').value, inline: true },
+                                { name: 'Dibuat oleh', value: originalEmbed.data.fields.find(f => f.name === 'Dibuat oleh')?.value || 'Unknown', inline: true },
                                 { name: 'Status', value: 'DITOLAK', inline: true },
-                                { name: 'Tanggal', value: interaction.message.embeds[0].data.fields.find(f => f.name === 'Tanggal').value, inline: true },
+                                { name: 'Tanggal', value: originalEmbed.data.fields.find(f => f.name === 'Tanggal')?.value || new Date().toLocaleString('id-ID'), inline: true },
                                 { name: 'Ditolak oleh', value: interaction.user.tag, inline: false }
                             )
                             .setTimestamp();
@@ -912,9 +890,53 @@ module.exports = async (client, interaction) => {
 
                         // Send success message to admin
                         await interaction.followUp({
-                            content: `Klaim #${claimId} telah ditolak.`,
+                            content: `Tiket klaim #${claimId} telah ditolak.`,
                             ephemeral: true
                         });
+
+                        // Get the claim details to include in the message
+                        const getClaimDetailsForRejection = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `SELECT user_id, description, wallet_number, address, reward_amount FROM claims WHERE id = ?`;
+                                db.get(query, [claimId], (err, row) => {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve(row);
+                                    }
+                                });
+                            });
+                        };
+
+                        const claimDetails = await getClaimDetailsForRejection();
+                        
+                        // Send detailed rejection information in the thread
+                        try {
+                            const originalMessage = interaction.message;
+                            let thread = originalMessage.thread;
+                            
+                            if (thread) {
+                                // Send detailed rejection information in the existing thread
+                                const detailedRejectionMessage = `❌ **TIKET DITOLAK** ❌\n\n` +
+                                    `**Nama Penerima:** <@${claimDetails.user_id}>\n` +
+                                    `**Kategori Pemenang:** ${claimDetails.description?.substring(0, 50) + '...' || 'Tidak ada deskripsi'}\n` +
+                                    `**Total Hadiah:** ${claimDetails.reward_amount || 'Menunggu konfirmasi'}\n` +
+                                    `**Nomor E-Wallet:** ${claimDetails.wallet_number || 'Belum diisi'}\n` +
+                                    `**Alamat Lengkap:** ${claimDetails.address || 'Tidak disediakan (Privasi)'}\n\n` +
+                                    `Tiket klaim telah ditolak oleh ${interaction.user.tag}.`;
+                                    
+                                await thread.send({
+                                    content: detailedRejectionMessage
+                                });
+                                
+                                // Send a private notification to the user in the thread
+                                await thread.send({
+                                    content: `<@${claimDetails.user_id}> Tiket klaimmu telah ditolak. Silakan dicek informasi lebih lanjut di sini.`
+                                });
+                            }
+                        } catch (threadError) {
+                            console.error('Error sending to thread for claim rejection:', threadError);
+                        }
                     } catch (dbError) {
                         console.error('Database error updating claim:', dbError);
                         await interaction.reply({
@@ -3464,30 +3486,26 @@ module.exports = async (client, interaction) => {
                     await member.roles.remove(role);
                 }
                 
-                // Create a unique role name for the family (to avoid conflicts if user creates multiple families)
-                const uniqueRoleName = `${familyName} (Kepala)`;
-                
-                const newRole = await guild.roles.create({
-                    name: uniqueRoleName,
-                    color: '#FF69B4', // Pink color for family roles (correct property name)
+                // Create a role for the family (this will be the general family role for all members)
+                const familyRole = await guild.roles.create({
+                    name: familyName,
+                    color: '#FFB6C1', // Light pink color for family members
                     reason: `Created for family ${familyName} by ${interaction.user.tag}`
                 });
+                
+                // Create a unique role name for the family head (to distinguish from members)
+                const headRoleName = `${familyName} (Ketua)`;
+                
+                const headRole = await guild.roles.create({
+                    name: headRoleName,
+                    color: '#FF69B4', // Different color for family head
+                    reason: `Created for family head of ${familyName} by ${interaction.user.tag}`
+                });
 
-                // Add the new role to the user who created the family
-                await member.roles.add(newRole);
+                // Add the head role to the user who created the family
+                await member.roles.add(headRole);
 
-                // Create a role for family members with the same name as the family
-                try {
-                    const familyMemberRole = await guild.roles.create({
-                        name: familyName, // This will be the general family role for all members
-                        color: '#FFB6C1', // Light pink color for family members
-                        reason: `Created for family ${familyName} members by ${interaction.user.tag}`
-                    });
-                    
-                    console.log(`Role "${familyName}" created for family members`);
-                } catch (roleError) {
-                    console.error(`Error creating family member role "${familyName}":`, roleError);
-                }
+                console.log(`Roles "${familyName}" and "${headRoleName}" created for family`);
 
                 // Send notification to admin channel instead of creating a family channel
                 const adminChannelId = process.env.ADMIN_NOTIFICATION_CHANNEL_ID || process.env.STAFF_CHANNEL_ID;
@@ -3558,139 +3576,6 @@ module.exports = async (client, interaction) => {
                         content: '❌ Terjadi kesalahan saat membuat keluargamu. Silakan coba lagi nanti.',
                         flags: 64
                     });
-                }
-            }
-        }
-        // Handle Claim Reward modal submission
-        else if (interaction.customId === 'modal_claim_reward') {
-            try {
-                await interaction.deferReply({ flags: 64 }); // Using flags for ephemeral response
-
-                // Get the claim description from the modal
-                const claimDescription = interaction.fields.getTextInputValue('claim_input');
-
-                // Check if user is authorized to use this feature
-                const authorizedIds = process.env.CLIENT_OWNER_ID ?
-                    Array.isArray(process.env.CLIENT_OWNER_ID) ?
-                        process.env.CLIENT_OWNER_ID :
-                        process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
-                    : [];
-
-                if (!authorizedIds.includes(interaction.user.id)) {
-                    await interaction.editReply({
-                        content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
-                        flags: 64
-                    });
-                    return;
-                }
-
-                // Get the database connection
-                const { db } = require('../database/db');
-
-                // Insert the claim into the database
-                const insertClaim = () => {
-                    return new Promise((resolve, reject) => {
-                        const query = `
-                            INSERT INTO claims (user_id, description, status)
-                            VALUES (?, ?, ?)
-                        `;
-                        db.run(query, [interaction.user.id, claimDescription, 'PENDING'], function(err) {
-                            if (err) {
-                                reject(err);
-                            } else {
-                                resolve(this.lastID); // Get the inserted claim ID
-                            }
-                        });
-                    });
-                };
-
-                let claimId;
-                try {
-                    claimId = await insertClaim();
-                } catch (dbError) {
-                    console.error('Database error inserting claim:', dbError);
-                    await interaction.editReply({
-                        content: 'Terjadi kesalahan saat menyimpan klaim. Silakan coba lagi.',
-                        flags: 64
-                    });
-                    return;
-                }
-
-                // Get the claim log channel from environment variable
-                const claimChannelId = process.env.CLAIM_LOG_CHANNEL_ID;
-                if (!claimChannelId) {
-                    await interaction.editReply({
-                        content: 'Channel klaim belum dikonfigurasi. Silakan hubungi administrator.',
-                        flags: 64
-                    });
-                    return;
-                }
-
-                const claimChannel = interaction.guild.channels.cache.get(claimChannelId);
-                if (!claimChannel) {
-                    await interaction.editReply({
-                        content: 'Channel klaim tidak ditemukan. Silakan hubungi administrator.',
-                        flags: 64
-                    });
-                    return;
-                }
-
-                // Create embed for the claim
-                const { EmbedBuilder } = require('discord.js');
-                const claimEmbed = new EmbedBuilder()
-                    .setTitle(`🎁 Permintaan Klaim Baru #${claimId}`)
-                    .setDescription(claimDescription)
-                    .setColor('#FFD700')
-                    .addFields(
-                        { name: 'Diklaim oleh', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
-                        { name: 'Status', value: 'PENDING', inline: true },
-                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
-                    )
-                    .setTimestamp();
-
-                // Create buttons for admin actions
-                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-                const approveButton = new ButtonBuilder()
-                    .setLabel('Approve')
-                    .setStyle(ButtonStyle.Success)
-                    .setCustomId(`btn_approve_claim_${claimId}`);
-
-                const rejectButton = new ButtonBuilder()
-                    .setLabel('Reject')
-                    .setStyle(ButtonStyle.Danger)
-                    .setCustomId(`btn_reject_claim_${claimId}`);
-
-                const row = new ActionRowBuilder().addComponents(approveButton, rejectButton);
-
-                // Send the claim to the claim log channel
-                const sentMessage = await claimChannel.send({ embeds: [claimEmbed], components: [row] });
-
-                // Confirm to the user
-                await interaction.editReply({
-                    content: `Permintaan klaimmu telah dikirim dengan ID #${claimId} dan sedang diproses. Terima kasih!`,
-                    flags: 64
-                });
-            } catch (error) {
-                console.error('Error processing claim modal:', error);
-                if (!interaction.replied && !interaction.deferred) {
-                    try {
-                        await interaction.reply({
-                            content: 'Terjadi kesalahan saat memproses klaimmu. Silakan coba lagi.',
-                            ephemeral: true
-                        });
-                    } catch (replyError) {
-                        console.error('Failed to send error message:', replyError);
-                    }
-                } else {
-                    try {
-                        await interaction.editReply({
-                            content: 'Terjadi kesalahan saat memproses klaimmu. Silakan coba lagi.',
-                            flags: 64
-                        });
-                    } catch (editError) {
-                        console.error('Failed to edit reply after error:', editError);
-                    }
                 }
             }
         }
@@ -3826,18 +3711,23 @@ module.exports = async (client, interaction) => {
                     }
                 }
 
-                // Find the family role by name
+                // Find the family role by name (the general family role, not the head role)
                 if (family && family.family_name) {
                     // Refresh the guild roles cache to ensure we have the latest roles
                     await guild.roles.fetch();
                     
-                    const familyRole = guild.roles.cache.find(role => role.name === family.family_name);
+                    // Look for the general family role (without "(Ketua)" suffix)
+                    const familyRole = guild.roles.cache.find(role => 
+                        role.name === family.family_name && 
+                        !role.name.includes('(Ketua)')
+                    );
 
                     if (familyRole) {
                         try {
                             // Only add role if member is actually a guild member
                             if (member && member.joinedAt) {
                                 await member.roles.add(familyRole);
+                                console.log(`Role "${familyRole.name}" added to user ${requesterId}`);
                             } else {
                                 console.log(`User ${requesterId} bukan anggota guild, tidak bisa menambahkan role`);
                             }
@@ -3847,6 +3737,24 @@ module.exports = async (client, interaction) => {
                     } else {
                         console.error(`Family role "${family.family_name}" not found`);
                         console.log('Available roles:', guild.roles.cache.map(role => role.name).join(', '));
+                        
+                        // Try to find a role that contains the family name (as fallback)
+                        const similarRole = guild.roles.cache.find(role => 
+                            role.name.includes(family.family_name) && 
+                            !role.name.includes('(Ketua)')
+                        );
+                        
+                        if (similarRole) {
+                            console.log(`Found similar role: "${similarRole.name}", trying to use this instead`);
+                            try {
+                                if (member && member.joinedAt) {
+                                    await member.roles.add(similarRole);
+                                    console.log(`Similar role "${similarRole.name}" added to user ${requesterId}`);
+                                }
+                            } catch (roleError) {
+                                console.error('Error adding similar family role to user:', roleError);
+                            }
+                        }
                     }
                 } else {
                     console.error('Family data or family name is undefined');
@@ -4026,6 +3934,1062 @@ module.exports = async (client, interaction) => {
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
                         content: 'Terjadi kesalahan saat menolak permintaan bergabung keluarga. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+        // Handle Share Profile button click
+        else if (interaction.customId === 'btn_share_profile') {
+            try {
+                const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                // Create a modal
+                const shareProfileModal = new ModalBuilder()
+                    .setCustomId('modal_share_profile')
+                    .setTitle('Bagikan Profil Sosial Media');
+
+                // Input for Instagram username (required)
+                const instagramInput = new TextInputBuilder()
+                    .setCustomId('instagram_username')
+                    .setLabel('Instagram Username')
+                    .setPlaceholder('Contoh: johndoe, tidak perlu pakai @')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for TikTok username (required)
+                const tiktokInput = new TextInputBuilder()
+                    .setCustomId('tiktok_username')
+                    .setLabel('TikTok Username')
+                    .setPlaceholder('Contoh: johndoe, tidak perlu pakai @')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for description (required, max 100 chars)
+                const descriptionInput = new TextInputBuilder()
+                    .setCustomId('social_description')
+                    .setLabel('Deskripsi Singkat')
+                    .setPlaceholder('Ceritakan sedikit tentang dirimu...')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setMaxLength(100)
+                    .setRequired(true);
+
+                // Add inputs to modal
+                const firstActionRow = new ActionRowBuilder().addComponents(instagramInput);
+                const secondActionRow = new ActionRowBuilder().addComponents(tiktokInput);
+                const thirdActionRow = new ActionRowBuilder().addComponents(descriptionInput);
+
+                shareProfileModal.addComponents(firstActionRow, secondActionRow, thirdActionRow);
+
+                await interaction.showModal(shareProfileModal);
+            } catch (modalError) {
+                console.error('Error showing share profile modal:', modalError);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat membuka form bagikan profil. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+        // Handle Open Claim button click (now for users to create ticket)
+        else if (interaction.customId === 'btn_open_claim') {
+            try {
+                const { ModalBuilder, TextInputBuilder, ActionRowBuilder, TextInputStyle } = require('discord.js');
+
+                // Create a modal for enhanced claim
+                const claimModal = new ModalBuilder()
+                    .setCustomId('modal_enhanced_claim')
+                    .setTitle('Ajukan Tiket Klaim Hadiah');
+
+                // Input for receiver name (required)
+                const receiverNameInput = new TextInputBuilder()
+                    .setCustomId('receiver_name')
+                    .setLabel('Nama Penerima')
+                    .setPlaceholder('Masukkan nama penerima hadiah')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for winner category (required)
+                const categoryInput = new TextInputBuilder()
+                    .setCustomId('winner_category')
+                    .setLabel('Kategori Pemenang')
+                    .setPlaceholder('Contoh: Juara 1, Pemenang Minggu Ini, dll')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for reward amount (required)
+                const rewardInput = new TextInputBuilder()
+                    .setCustomId('reward_amount')
+                    .setLabel('Total Hadiah')
+                    .setPlaceholder('Contoh: Rp 500.000, 1 Voucher Game, dll')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for e-wallet number (required)
+                const walletInput = new TextInputBuilder()
+                    .setCustomId('wallet_number')
+                    .setLabel('Nomor E-Wallet')
+                    .setPlaceholder('Contoh: 081234567890 (DANA/OVO/GOPAY)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                // Input for address (optional for privacy)
+                const addressInput = new TextInputBuilder()
+                    .setCustomId('address')
+                    .setLabel('Alamat Lengkap (Opsional)')
+                    .setPlaceholder('Contoh: Jl. Merdeka No. 123, Kota, Provinsi (Boleh dikosongkan untuk privasi)')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false);
+
+                // Add inputs to modal
+                const firstActionRow = new ActionRowBuilder().addComponents(receiverNameInput);
+                const secondActionRow = new ActionRowBuilder().addComponents(categoryInput);
+                const thirdActionRow = new ActionRowBuilder().addComponents(rewardInput);
+                const fourthActionRow = new ActionRowBuilder().addComponents(walletInput);
+                const fifthActionRow = new ActionRowBuilder().addComponents(addressInput);
+
+                claimModal.addComponents(
+                    firstActionRow, 
+                    secondActionRow, 
+                    thirdActionRow, 
+                    fourthActionRow, 
+                    fifthActionRow
+                );
+
+                await interaction.showModal(claimModal);
+            } catch (modalError) {
+                console.error('Error showing enhanced claim modal:', modalError);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat membuka form klaim. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+        // Handle Share Profile modal submission
+        else if (interaction.customId === 'modal_share_profile') {
+            try {
+                await interaction.deferReply({ flags: 64 }); // Using flags for ephemeral response
+
+                // Get values from modal
+                const instagramUsername = interaction.fields.getTextInputValue('instagram_username');
+                const tiktokUsername = interaction.fields.getTextInputValue('tiktok_username');
+                const socialDescription = interaction.fields.getTextInputValue('social_description');
+
+                // Security check: validate input for potential phishing links
+                if (instagramUsername.includes('http') || instagramUsername.includes('.com') || 
+                    tiktokUsername.includes('http') || tiktokUsername.includes('.com')) {
+                    await interaction.editReply({
+                        content: 'Mohon masukkan username saja, tanpa link lengkap (tidak boleh mengandung "http" atau ".com").',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Convert to proper links
+                const instagramLink = `https://instagram.com/${instagramUsername}`;
+                const tiktokLink = `https://tiktok.com/@${tiktokUsername}`;
+
+                // Create embed with user's social media info
+                const { EmbedBuilder } = require('discord.js');
+                const socialEmbed = new EmbedBuilder()
+                    .setTitle(`📱 Profil Sosial Media - ${interaction.user.username}`)
+                    .setDescription(socialDescription)
+                    .setColor('#90EE90')
+                    .addFields(
+                        { name: '-instagram', value: `[${instagramUsername}](${instagramLink})`, inline: true },
+                        { name: ' TikTok', value: `[${tiktokUsername}](${tiktokLink})`, inline: true }
+                    )
+                    .setFooter({ text: `Dibagikan oleh ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
+                    .setTimestamp();
+
+                // Create link buttons
+                const { ActionRowBuilder, ButtonBuilder } = require('discord.js');
+                
+                const linkButtons = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('Instagram')
+                        .setURL(instagramLink)
+                        .setStyle(ButtonStyle.Link),
+                    new ButtonBuilder()
+                        .setLabel('TikTok')
+                        .setURL(tiktokLink)
+                        .setStyle(ButtonStyle.Link)
+                );
+
+                // Send the embed with link buttons
+                await interaction.editReply({
+                    content: 'Profil sosial media kamu telah dibagikan:',
+                    embeds: [socialEmbed],
+                    components: [linkButtons],
+                    flags: 64
+                });
+
+                // Create link buttons with logos - with share button on the left
+                const linkButtonsWithShare = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('btn_share_profile')
+                        .setLabel('Bagikan Profil')
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('📱'),
+                    new ButtonBuilder()
+                        .setLabel('Instagram')
+                        .setURL(instagramLink)
+                        .setStyle(ButtonStyle.Link)
+                        .setEmoji('📸'),
+                    new ButtonBuilder()
+                        .setLabel('TikTok')
+                        .setURL(tiktokLink)
+                        .setStyle(ButtonStyle.Link)
+                        .setEmoji('🎵')
+                );
+
+                // Send to the target social sharing channel
+                const socialSharingChannelId = process.env.SOCIAL_SHARING_CHANNEL_ID;
+                if (socialSharingChannelId) {
+                    const socialSharingChannel = interaction.client.channels.cache.get(socialSharingChannelId);
+                    if (socialSharingChannel) {
+                        await socialSharingChannel.send({
+                            content: `<@${interaction.user.id}> telah membagikan profil sosial media mereka:`,
+                            embeds: [socialEmbed],
+                            components: [linkButtonsWithShare]
+                        });
+                    } else {
+                        // If target channel is not found, send to current channel as fallback
+                        await interaction.channel.send({
+                            content: `<@${interaction.user.id}> telah membagikan profil sosial media mereka:`,
+                            embeds: [socialEmbed],
+                            components: [linkButtonsWithShare]
+                        });
+                    }
+                } else {
+                    // If no target channel is configured, send to current channel
+                    await interaction.channel.send({
+                        content: `<@${interaction.user.id}> telah membagikan profil sosial media mereka:`,
+                        embeds: [socialEmbed],
+                        components: [linkButtonsWithShare]
+                    });
+                }
+            } catch (error) {
+                console.error('Error processing share profile modal:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat memproses profil sosial media kamu. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                } else {
+                    await interaction.editReply({
+                        content: 'Terjadi kesalahan saat memproses profil sosial media kamu. Silakan coba lagi.',
+                        flags: 64
+                    });
+                }
+            }
+        }
+        // Handle Enhanced Claim modal submission (creating ticket)
+        else if (interaction.customId === 'modal_enhanced_claim') {
+            try {
+                await interaction.deferReply({ flags: 64 }); // Using flags for ephemeral response
+
+                // Get values from modal
+                const receiverName = interaction.fields.getTextInputValue('receiver_name');
+                const winnerCategory = interaction.fields.getTextInputValue('winner_category');
+                const rewardAmount = interaction.fields.getTextInputValue('reward_amount');
+                const walletNumber = interaction.fields.getTextInputValue('wallet_number');
+                const address = interaction.fields.getTextInputValue('address');
+
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Check the maximum number of pending claims allowed per user from environment variable
+                const maxPendingClaims = parseInt(process.env.MAX_PENDING_CLAIMS_PER_USER) || 5;
+                
+                // Function to clean up invalid claims (channels/threads that no longer exist)
+                const cleanupInvalidClaims = async () => {
+                    return new Promise(async (resolve, reject) => {
+                        // Get all pending claims for this user
+                        const query = `SELECT id, channel_id, thread_id FROM claims WHERE user_id = ? AND status = 'PENDING'`;
+                        db.all(query, [interaction.user.id], async (err, rows) => {
+                            if (err) {
+                                reject(err);
+                                return;
+                            }
+                            
+                            console.log(`Found ${rows.length} pending claims for user ${interaction.user.id}`);
+                            
+                            // Check each claim to see if its channel/thread still exists
+                            for (const claim of rows) {
+                                let channelExists = true;
+                                
+                                if (claim.channel_id) {
+                                    // Check if the channel still exists
+                                    try {
+                                        const channel = await interaction.guild.channels.fetch(claim.channel_id);
+                                        if (!channel) {
+                                            channelExists = false;
+                                        }
+                                    } catch (channelError) {
+                                        // Channel doesn't exist
+                                        channelExists = false;
+                                    }
+                                } else if (claim.thread_id) {
+                                    // Check if the thread still exists
+                                    try {
+                                        const thread = await interaction.guild.channels.fetch(claim.thread_id);
+                                        if (!thread) {
+                                            channelExists = false;
+                                        }
+                                    } catch (threadError) {
+                                        // Thread doesn't exist
+                                        channelExists = false;
+                                    }
+                                }
+                                
+                                // If the channel/thread doesn't exist, update the claim status to ARCHIVED
+                                if (!channelExists) {
+                                    try {
+                                        const updateQuery = `UPDATE claims SET status = 'ARCHIVED' WHERE id = ?`;
+                                        db.run(updateQuery, [claim.id], (updateErr) => {
+                                            if (updateErr) {
+                                                console.error(`Error updating claim ${claim.id} status to ARCHIVED:`, updateErr);
+                                            } else {
+                                                console.log(`Claim ${claim.id} status updated to ARCHIVED (channel/thread no longer exists)`);
+                                            }
+                                        });
+                                    } catch (updateError) {
+                                        console.error(`Error in updating claim ${claim.id}:`, updateError);
+                                    }
+                                } else {
+                                    console.log(`Claim ${claim.id} channel/thread still exists`);
+                                }
+                            }
+                            
+                            resolve();
+                        });
+                    });
+                };
+                
+                // Clean up invalid claims first
+                await cleanupInvalidClaims();
+                
+                // Check if user already has maxPendingClaims or more pending claims
+                const checkPendingClaims = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `SELECT COUNT(*) as count FROM claims WHERE user_id = ? AND status = 'PENDING'`;
+                        db.get(query, [interaction.user.id], (err, row) => {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(row.count);
+                            }
+                        });
+                    });
+                };
+
+                const pendingCount = await checkPendingClaims();
+                
+                console.log(`User ${interaction.user.id} has ${pendingCount} pending claims (max allowed: ${maxPendingClaims})`);
+                
+                if (pendingCount >= maxPendingClaims) {
+                    // Get details of pending claims for debugging
+                    const getPendingClaimsDetails = () => {
+                        return new Promise((resolve, reject) => {
+                            const query = `SELECT id, channel_id, thread_id FROM claims WHERE user_id = ? AND status = 'PENDING'`;
+                            db.all(query, [interaction.user.id], (err, rows) => {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    resolve(rows);
+                                }
+                            });
+                        });
+                    };
+                    
+                    const pendingClaims = await getPendingClaimsDetails();
+                    console.log(`Pending claims for user ${interaction.user.id}:`, pendingClaims);
+                    
+                    await interaction.editReply({
+                        content: `Kamu sudah memiliki ${maxPendingClaims} klaim aktif. Mohon tunggu hingga beberapa klaim selesai sebelum membuat klaim baru.`,
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Insert the enhanced claim into the database
+                const insertEnhancedClaim = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `
+                            INSERT INTO claims (user_id, description, status, wallet_number, address, reward_amount, channel_id, thread_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        `;
+                        db.run(query, [
+                            interaction.user.id, 
+                            `Klaim Hadiah: ${winnerCategory} - ${rewardAmount}`, 
+                            'PENDING', 
+                            walletNumber, 
+                            address, 
+                            rewardAmount,
+                            null, // channel_id - will be updated later if channel is created
+                            null  // thread_id - will be updated later if thread is created
+                        ], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.lastID); // Get the inserted claim ID
+                            }
+                        });
+                    });
+                };
+
+                let claimId;
+                try {
+                    claimId = await insertEnhancedClaim();
+                } catch (dbError) {
+                    console.error('Database error inserting enhanced claim:', dbError);
+                    await interaction.editReply({
+                        content: 'Terjadi kesalahan saat menyimpan klaim. Silakan coba lagi.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Get the claim log channel from environment variable
+                const claimChannelId = process.env.CLAIM_LOG_CHANNEL_ID;
+                if (!claimChannelId) {
+                    await interaction.editReply({
+                        content: 'Channel klaim belum dikonfigurasi. Silakan hubungi administrator.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                const claimChannel = interaction.guild.channels.cache.get(claimChannelId);
+                if (!claimChannel) {
+                    await interaction.editReply({
+                        content: 'Channel klaim tidak ditemukan. Silakan hubungi administrator.',
+                        flags: 64
+                    });
+                    return;
+                }
+
+                // Get the claim category from environment variable
+                const claimCategoryId = process.env.CLAIM_CATEGORY_ID;
+                
+                if (!claimCategoryId) {
+                    // If no category is set, send to the claim log channel as before but with minimal info
+                    const { EmbedBuilder } = require('discord.js');
+                    const minimalEmbed = new EmbedBuilder()
+                        .setTitle(`🎫 Tiket Klaim Baru #${claimId}`)
+                        .setDescription(`<@${interaction.user.id}> telah membuat tiket klaim baru.`)
+                        .setColor('#FFD700')
+                        .addFields(
+                            { name: 'Status', value: 'PENDING', inline: true },
+                            { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                        )
+                        .setTimestamp();
+
+                    // Send the minimal claim notification to the claim log channel
+                    const sentMessage = await claimChannel.send({ 
+                        content: `🚨 **KLAIM RAHASIA** - Hanya admin yang dapat melihat detail.`,
+                        embeds: [minimalEmbed]
+                    });
+                    
+                    // Create a thread for this ticket
+                    try {
+                        const thread = await sentMessage.startThread({
+                            name: `🔒 Tiket Klaim #${claimId} - ${receiverName}`,
+                            autoArchiveDuration: 60, // Auto archive after 1 hour
+                        });
+                        
+                        // Update the claim record with the thread ID
+                        const updateClaimThread = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `UPDATE claims SET thread_id = ? WHERE id = ?`;
+                                db.run(query, [thread.id, claimId], function(err) {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve();
+                                    }
+                                });
+                            });
+                        };
+                        
+                        await updateClaimThread();
+                        
+                        // Send a welcome message in the thread
+                        await thread.send({
+                            content: ` Halo <@${interaction.user.id}>! Tiket klaimmu telah dibuat. Admin akan segera menangani permintaanmu.`
+                        });
+                        
+                        // Send detailed information in the thread for admin reference
+                        const detailedInfo = `**🔐 INFORMASI KLAIM RAHASIA:**\n` +
+                            `**Nama Penerima:** ${receiverName}\n` +
+                            `**Kategori Pemenang:** ${winnerCategory}\n` +
+                            `**Total Hadiah:** ${rewardAmount}\n` +
+                            `**Nomor E-Wallet:** ${walletNumber}\n` +
+                            `**Alamat Lengkap:** ${address || 'Tidak disediakan (Privasi)'}\n` +
+                            `**Dibuat oleh:** ${interaction.user.tag} (${interaction.user.id})`;
+                        
+                        await thread.send({
+                            content: detailedInfo
+                        });
+                        
+                        // Send the full embed with all details in the thread as well
+                        const { EmbedBuilder } = require('discord.js');
+                        const detailedEmbed = new EmbedBuilder()
+                            .setTitle(`🔐 Detail Klaim #${claimId}`)
+                            .setColor('#9370DB') // Purple color for private info
+                            .addFields(
+                                { name: '>Nama Penerima', value: receiverName, inline: false },
+                                { name: 'Kategori Pemenang', value: winnerCategory, inline: true },
+                                { name: 'Total Hadiah', value: rewardAmount, inline: true },
+                                { name: 'Nomor E-Wallet', value: walletNumber, inline: true },
+                                { name: 'Alamat Lengkap', value: address || 'Tidak disediakan (Privasi)', inline: false },
+                                { name: 'Dibuat oleh', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+                                { name: 'Status', value: 'PENDING', inline: true },
+                                { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                            )
+                            .setTimestamp();
+                        
+                        await thread.send({ embeds: [detailedEmbed] });
+                    } catch (threadError) {
+                        console.error('Error creating thread for claim ticket:', threadError);
+                    }
+                } else {
+                    // Create a new text channel in the specified category
+                    try {
+                        const claimCategory = interaction.guild.channels.cache.get(claimCategoryId);
+                        
+                        if (!claimCategory) {
+                            await interaction.editReply({
+                                content: 'Kategori klaim tidak ditemukan. Silakan hubungi admin.',
+                                flags: 64
+                            });
+                            return;
+                        }
+                        
+                        // Verify that the provided ID is actually a category
+                        if (claimCategory.type !== 4) { // ChannelType.GuildCategory is 4
+                            console.error(`Provided CLAIM_CATEGORY_ID ${claimCategoryId} is not a category. Creating claim in default way instead.`);
+                            // Fallback to creating thread in the claim log channel
+                            const { EmbedBuilder } = require('discord.js');
+                            const minimalEmbed = new EmbedBuilder()
+                                .setTitle(`🎫 Tiket Klaim Baru #${claimId}`)
+                                .setDescription(`<@${interaction.user.id}> telah membuat tiket klaim baru.`)
+                                .setColor('#FFD700')
+                                .addFields(
+                                    { name: 'Status', value: 'PENDING', inline: true },
+                                    { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                                )
+                                .setTimestamp();
+
+                            // Send the minimal claim notification to the claim log channel
+                            const sentMessage = await claimChannel.send({ 
+                                content: `🚨 **KLAIM RAHASIA** - Hanya admin yang dapat melihat detail.`,
+                                embeds: [minimalEmbed]
+                            });
+                            
+                            // Create a thread for this ticket
+                            try {
+                                const thread = await sentMessage.startThread({
+                                    name: `🔒 Tiket Klaim #${claimId} - ${receiverName}`,
+                                    autoArchiveDuration: 60, // Auto archive after 1 hour
+                                });
+                                
+                                // Update the claim record with the thread ID
+                                const updateClaimThread = () => {
+                                    return new Promise((resolve, reject) => {
+                                        const query = `UPDATE claims SET thread_id = ? WHERE id = ?`;
+                                        db.run(query, [thread.id, claimId], function(err) {
+                                            if (err) {
+                                                reject(err);
+                                            } else {
+                                                resolve();
+                                            }
+                                        });
+                                    });
+                                };
+                                
+                                await updateClaimThread();
+                                
+                                // Send a welcome message in the thread
+                                await thread.send({
+                                    content: ` Halo <@${interaction.user.id}>! Tiket klaimmu telah dibuat. Admin akan segera menangani permintaanmu.`
+                                });
+                                
+                                // Send detailed information in the thread for admin reference
+                                const detailedInfo = `**🔐 INFORMASI KLAIM RAHASIA:**\n` +
+                                    `**Nama Penerima:** ${receiverName}\n` +
+                                    `**Kategori Pemenang:** ${winnerCategory}\n` +
+                                    `**Total Hadiah:** ${rewardAmount}\n` +
+                                    `**Nomor E-Wallet:** ${walletNumber}\n` +
+                                    `**Alamat Lengkap:** ${address || 'Tidak disediakan (Privasi)'}\n` +
+                                    `**Dibuat oleh:** ${interaction.user.tag} (${interaction.user.id})`;
+                                
+                                await thread.send({
+                                    content: detailedInfo
+                                });
+                                
+                                // Send the full embed with all details in the thread as well
+                                const { EmbedBuilder } = require('discord.js');
+                                const detailedEmbed = new EmbedBuilder()
+                                    .setTitle(`🔐 Detail Klaim #${claimId}`)
+                                    .setColor('#9370DB') // Purple color for private info
+                                    .addFields(
+                                        { name: '>Nama Penerima', value: receiverName, inline: false },
+                                        { name: 'Kategori Pemenang', value: winnerCategory, inline: true },
+                                        { name: 'Total Hadiah', value: rewardAmount, inline: true },
+                                        { name: 'Nomor E-Wallet', value: walletNumber, inline: true },
+                                        { name: 'Alamat Lengkap', value: address || 'Tidak disediakan (Privasi)', inline: false },
+                                        { name: 'Dibuat oleh', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+                                        { name: 'Status', value: 'PENDING', inline: true },
+                                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                                    )
+                                    .setTimestamp();
+                                
+                                // Create buttons for admins
+                                const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                                const actionRow = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId(`claim_room_${claimId}`)
+                                        .setLabel('Claim Room')
+                                        .setStyle(ButtonStyle.Primary)
+                                        .setEmoji('🙋'),
+                                    new ButtonBuilder()
+                                        .setCustomId(`close_claim_${claimId}`)
+                                        .setLabel('Tutup Locket')
+                                        .setStyle(ButtonStyle.Danger)
+                                        .setEmoji('🔒')
+                                );
+                                
+                                await thread.send({ 
+                                    embeds: [detailedEmbed],
+                                    components: [actionRow]
+                                });
+
+                                // Send confirmation to the user
+                                await interaction.editReply({
+                                    content: `Tiket klaimmu telah dibuat dengan ID #${claimId} di thread privat. Hanya kamu dan admin yang bisa mengaksesnya. Terima kasih!`,
+                                    flags: 64
+                                });
+                            } catch (threadError) {
+                                console.error('Error creating thread for claim ticket:', threadError);
+                                await interaction.editReply({
+                                    content: 'Terjadi kesalahan saat membuat thread klaim. Silakan coba lagi.',
+                                    flags: 64
+                                });
+                            }
+                            return; // Exit early since we're using fallback
+                        }
+                        
+                        // Create a new text channel for this claim
+                        const claimChannelCreated = await interaction.guild.channels.create({
+                            name: `🔒klaim-${claimId}-${receiverName.replace(/\s+/g, '-').toLowerCase()}`,
+                            type: 0, // Text channel type
+                            parent: claimCategoryId,
+                            topic: `Klaim Ticket #${claimId} - ${receiverName}`,
+                            permissionOverwrites: [
+                                {
+                                    id: interaction.guild.roles.everyone,
+                                    deny: ['ViewChannel'],
+                                },
+                                // Allow access for administrators
+                                {
+                                    id: interaction.guild.roles.cache.find(role => role.name === 'Administrator')?.id || interaction.guild.id, // Default to guild ID as fallback
+                                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                                },
+                                // Allow access for specific staff role if defined
+                                {
+                                    id: interaction.guild.roles.cache.find(role => role.name === 'Staff')?.id || interaction.user.id, // Fallback to user ID if no Staff role
+                                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                                },
+                                // Allow access for the user who created the claim
+                                {
+                                    id: interaction.user.id,
+                                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                                }
+                            ],
+                        });
+                        
+                        // Update the claim record with the channel ID
+                        const updateClaimChannel = () => {
+                            return new Promise((resolve, reject) => {
+                                const query = `UPDATE claims SET channel_id = ? WHERE id = ?`;
+                                db.run(query, [claimChannelCreated.id, claimId], function(err) {
+                                    if (err) {
+                                        reject(err);
+                                    } else {
+                                        resolve();
+                                    }
+                                });
+                            });
+                        };
+                        
+                        await updateClaimChannel();
+                        
+                        // Send detailed information in the new channel
+                        const detailedInfo = `**🔐 TIKET KLAIM RAHASIA #${claimId} 🔐**\n\n` +
+                            `**Nama Penerima:** ${receiverName}\n` +
+                            `**Kategori Pemenang:** ${winnerCategory}\n` +
+                            `**Total Hadiah:** ${rewardAmount}\n` +
+                            `**Nomor E-Wallet:** ${walletNumber}\n` +
+                            `**Alamat Lengkap:** ${address || 'Tidak disediakan (Privasi)'}\n` +
+                            `**Dibuat oleh:** ${interaction.user.tag} (${interaction.user.id})\n` +
+                            `**Status:** PENDING\n` +
+                            `**Tanggal:** ${new Date().toLocaleString('id-ID')}`;
+                        
+                        const claimMessage = await claimChannelCreated.send({
+                            content: ` Halo <@${interaction.user.id}>! Tiket klaimmu telah dibuat. Admin akan segera menangani permintaanmu.`,
+                        });
+                        
+                        await claimChannelCreated.send({
+                            content: detailedInfo
+                        });
+                        
+                        // Send the full embed with all details in the channel as well
+                        const { EmbedBuilder } = require('discord.js');
+                        const detailedEmbed = new EmbedBuilder()
+                            .setTitle(`🔐 Detail Klaim #${claimId}`)
+                            .setColor('#9370DB') // Purple color for private info
+                            .addFields(
+                                { name: '>Nama Penerima', value: receiverName, inline: false },
+                                { name: 'Kategori Pemenang', value: winnerCategory, inline: true },
+                                { name: 'Total Hadiah', value: rewardAmount, inline: true },
+                                { name: 'Nomor E-Wallet', value: walletNumber, inline: true },
+                                { name: 'Alamat Lengkap', value: address || 'Tidak disediakan (Privasi)', inline: false },
+                                { name: 'Dibuat oleh', value: `${interaction.user.tag} (${interaction.user.id})`, inline: true },
+                                { name: 'Status', value: 'PENDING', inline: true },
+                                { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                            )
+                            .setTimestamp();
+                        
+                        // Create buttons for admins
+                        const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                        const actionRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`claim_room_${claimId}`)
+                                .setLabel('Claim Room')
+                                .setStyle(ButtonStyle.Primary)
+                                .setEmoji('🙋'),
+                            new ButtonBuilder()
+                                .setCustomId(`close_claim_${claimId}`)
+                                .setLabel('Tutup Locket')
+                                .setStyle(ButtonStyle.Danger)
+                                .setEmoji('🔒')
+                        );
+                        
+                        await claimChannelCreated.send({ 
+                            embeds: [detailedEmbed],
+                            components: [actionRow]
+                        });
+                        
+                        // Send confirmation to the user
+                        await interaction.editReply({
+                            content: `Tiket klaimmu telah dibuat dengan ID #${claimId} di channel privat. Hanya kamu dan admin yang bisa mengaksesnya. Terima kasih!`,
+                            flags: 64
+                        });
+                    } catch (channelError) {
+                        console.error('Error creating claim channel:', channelError);
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat membuat channel klaim. Silakan coba lagi.',
+                            flags: 64
+                        });
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error processing enhanced claim modal:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    try {
+                        await interaction.reply({
+                            content: 'Terjadi kesalahan saat membuat tiket klaim. Silakan coba lagi.',
+                            ephemeral: true
+                        });
+                    } catch (replyError) {
+                        console.error('Failed to send error message:', replyError);
+                    }
+                } else {
+                    try {
+                        await interaction.editReply({
+                            content: 'Terjadi kesalahan saat membuat tiket klaim. Silakan coba lagi.',
+                            flags: 64
+                        });
+                    } catch (editError) {
+                        console.error('Failed to edit reply after error:', editError);
+                    }
+                }
+            }
+        }
+        // Handle Claim Room button click
+        else if (interaction.customId && interaction.customId.startsWith('claim_room_')) {
+            try {
+                // Check if user is authorized to use this feature
+                const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                    Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                        process.env.CLIENT_OWNER_ID :
+                        process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                    : [];
+
+                // Check if user has admin permissions
+                const isAdmin = interaction.member.permissions.has('Administrator');
+                const isOwner = authorizedIds.includes(interaction.user.id);
+                
+                if (!isAdmin && !isOwner) {
+                    return await interaction.reply({
+                        content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                        ephemeral: true
+                    });
+                }
+
+                // Extract claim ID from custom ID
+                const claimId = interaction.customId.split('_')[2]; // Format: claim_room_{id}
+
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Get the claim details to find the channel/thread ID and other info
+                const getClaimDetails = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `SELECT channel_id, thread_id, user_id, description, wallet_number, address, reward_amount FROM claims WHERE id = ?`;
+                        db.get(query, [claimId], (err, row) => {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+                };
+
+                const claimDetails = await getClaimDetails();
+                
+                if (!claimDetails) {
+                    await interaction.reply({
+                        content: 'Klaim tidak ditemukan.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Update the embed to show who claimed the room
+                const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                const updatedEmbed = new EmbedBuilder()
+                    .setTitle(`🔐 Detail Klaim #${claimId}`)
+                    .setDescription(`Klaim ini sedang ditangani oleh ${interaction.user.tag}`)
+                    .setColor('#0000FF') // Blue color for claimed
+                    .addFields(
+                        { name: 'Dibuat oleh', value: `<@${claimDetails.user_id}>`, inline: true },
+                        { name: 'Status', value: 'CLAIMED', inline: true },
+                        { name: 'Tanggal', value: new Date().toLocaleString('id-ID'), inline: true }
+                    )
+                    .setTimestamp();
+
+                // Disable the claim button and keep the close button enabled
+                const claimButton = new ButtonBuilder()
+                    .setCustomId(`claim_room_${claimId}`)
+                    .setLabel('Room Sudah Diambil')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🙋')
+                    .setDisabled(true);
+
+                const closeButton = new ButtonBuilder()
+                    .setCustomId(`close_claim_${claimId}`)
+                    .setLabel('Tutup Locket')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒');
+
+                const updatedRow = new ActionRowBuilder().addComponents(claimButton, closeButton);
+
+                // Update the message
+                await interaction.update({ 
+                    embeds: [updatedEmbed], 
+                    components: [updatedRow] 
+                });
+
+                // Send confirmation message
+                await interaction.followUp({
+                    content: `Kamu telah mengambil klaim #${claimId}. Sekarang kamu bisa menangani klaim ini.`,
+                    ephemeral: true
+                });
+            } catch (error) {
+                console.error('Error handling claim room button:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat mengambil room klaim. Silakan coba lagi.',
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+        // Handle Close Claim button click
+        else if (interaction.customId && interaction.customId.startsWith('close_claim_')) {
+            try {
+                // Check if user is authorized to use this feature
+                const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                    Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                        process.env.CLIENT_OWNER_ID :
+                        process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                    : [];
+
+                // Check if user has admin permissions
+                const isAdmin = interaction.member.permissions.has('Administrator');
+                const isOwner = authorizedIds.includes(interaction.user.id);
+                
+                if (!isAdmin && !isOwner) {
+                    return await interaction.reply({
+                        content: 'Akses ditolak. Hanya Admin/Developer yang memiliki izin untuk melakukan tindakan ini.',
+                        ephemeral: true
+                    });
+                }
+
+                // Extract claim ID from custom ID
+                const claimId = interaction.customId.split('_')[2]; // Format: close_claim_{id}
+
+                // Get the database connection
+                const { db } = require('../database/db');
+
+                // Get the claim details to find the channel/thread ID
+                const getClaimDetails = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `SELECT channel_id, thread_id, status FROM claims WHERE id = ?`;
+                        db.get(query, [claimId], (err, row) => {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(row);
+                            }
+                        });
+                    });
+                };
+
+                const claimDetails = await getClaimDetails();
+                
+                if (!claimDetails) {
+                    await interaction.reply({
+                        content: 'Klaim tidak ditemukan.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Check if claim is already closed
+                if (claimDetails.status === 'APPROVED' || claimDetails.status === 'REJECTED' || claimDetails.status === 'CLOSED') {
+                    await interaction.reply({
+                        content: 'Klaim ini sudah ditutup atau diproses.',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Update claim status to CLOSED
+                const updateClaimStatus = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `UPDATE claims SET status = ? WHERE id = ?`;
+                        db.run(query, ['CLOSED', claimId], function(err) {
+                            if (err) {
+                                reject(err);
+                            } else {
+                                resolve(this.changes); // Number of affected rows
+                            }
+                        });
+                    });
+                };
+
+                try {
+                    const changes = await updateClaimStatus();
+                    if (changes === 0) {
+                        await interaction.reply({
+                            content: 'Klaim tidak ditemukan.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
+                    // Try to delete the channel/thread if it exists
+                    let deletionSuccess = false;
+                    
+                    if (claimDetails && claimDetails.channel_id) {
+                        // Try to delete the channel
+                        try {
+                            const channelToDelete = await interaction.guild.channels.fetch(claimDetails.channel_id);
+                            if (channelToDelete) {
+                                await channelToDelete.delete();
+                                deletionSuccess = true;
+                            }
+                        } catch (channelError) {
+                            console.error('Error deleting claim channel:', channelError);
+                        }
+                    } else if (claimDetails && claimDetails.thread_id) {
+                        // Try to delete the thread
+                        try {
+                            const threadToDelete = await interaction.guild.channels.fetch(claimDetails.thread_id);
+                            if (threadToDelete) {
+                                await threadToDelete.delete();
+                                deletionSuccess = true;
+                            }
+                        } catch (threadError) {
+                            console.error('Error deleting claim thread:', threadError);
+                        }
+                    }
+
+                    // Update the button to show it's closed
+                    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+                    const updatedEmbed = new EmbedBuilder()
+                        .setTitle(`🔐 Detail Klaim #${claimId} - DITUTUP`)
+                        .setColor('#808080') // Gray color for closed
+                        .setDescription('Klaim ini telah ditutup oleh admin.')
+                        .setTimestamp();
+
+                    // Disable both buttons
+                    const disabledClaimButton = new ButtonBuilder()
+                        .setCustomId(`claim_room_${claimId}`)
+                        .setLabel('Room Sudah Diambil')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setEmoji('🙋')
+                        .setDisabled(true);
+
+                    const disabledCloseButton = new ButtonBuilder()
+                        .setCustomId(`close_claim_${claimId}`)
+                        .setLabel('Locket Ditutup')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setEmoji('🔒')
+                        .setDisabled(true);
+
+                    const updatedRow = new ActionRowBuilder().addComponents(disabledClaimButton, disabledCloseButton);
+
+                    // Update the message
+                    try {
+                        await interaction.update({ 
+                            embeds: [updatedEmbed], 
+                            components: [updatedRow] 
+                        });
+                    } catch (updateError) {
+                        console.error('Error updating message after closing claim:', updateError);
+                    }
+
+                    // Send confirmation message
+                    try {
+                        await interaction.followUp({
+                            content: `Klaim #${claimId} telah ditutup.${deletionSuccess ? ' Channel/thread terkait telah dihapus.' : ''}`,
+                            ephemeral: true
+                        });
+                    } catch (followUpError) {
+                        console.error('Error sending follow-up message:', followUpError);
+                    }
+                } catch (dbError) {
+                    console.error('Database error updating claim status:', dbError);
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat menutup klaim.',
+                        ephemeral: true
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling close claim button:', error);
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: 'Terjadi kesalahan saat menutup klaim. Silakan coba lagi.',
                         ephemeral: true
                     });
                 }

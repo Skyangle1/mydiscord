@@ -63,7 +63,10 @@ module.exports = {
                     .addFields(
                         { name: 'Status', value: claim.status, inline: true },
                         { name: 'Dibuat pada', value: new Date(claim.created_at).toLocaleString('id-ID'), inline: true },
-                        { name: 'Pemilik Klaim', value: `<@${claim.user_id}>`, inline: false }
+                        { name: 'Pemilik Klaim', value: `<@${claim.user_id}>`, inline: false },
+                        { name: 'Nomor E-Wallet', value: claim.wallet_number || 'Belum diisi', inline: true },
+                        { name: 'Alamat Lengkap', value: claim.address || 'N/A', inline: false },
+                        { name: 'Total Hadiah', value: claim.reward_amount || 'Menunggu konfirmasi', inline: true }
                     )
                     .setTimestamp();
 
@@ -123,7 +126,8 @@ module.exports = {
                     };
                     const emoji = statusEmojis[claim.status] || '❓';
                     description += `${emoji} **#${claim.id}** - ${claim.status} - ${new Date(claim.created_at).toLocaleDateString('id-ID')}\n`;
-                    description += `> ${claim.description.substring(0, 50)}${claim.description.length > 50 ? '...' : ''}\n\n`;
+                    description += `> ${claim.description.substring(0, 50)}${claim.description.length > 50 ? '...' : ''}\n`;
+                    description += `**Hadiah:** ${claim.reward_amount || 'Menunggu konfirmasi'} | **E-Wallet:** ${claim.wallet_number || 'Belum diisi'}\n\n`;
                 });
 
                 const claimsEmbed = new EmbedBuilder()

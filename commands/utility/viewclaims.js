@@ -26,16 +26,8 @@ module.exports = {
             const getClaims = () => {
                 return new Promise((resolve, reject) => {
                     const query = `
-                        SELECT c.id, c.user_id, c.description, c.status, c.created_at, u.username
+                        SELECT c.id, c.user_id, c.description, c.status, c.created_at, c.wallet_number, c.address, c.reward_amount, c.user_id as username
                         FROM claims c
-                        LEFT JOIN (
-                            SELECT DISTINCT user_id, username
-                            FROM (
-                                SELECT user_id, username FROM letters
-                                UNION
-                                SELECT sender_id as user_id, 'Unknown' as username FROM letters
-                            )
-                        ) u ON c.user_id = u.user_id
                         ORDER BY c.created_at DESC
                         LIMIT 10
                     `;
@@ -67,9 +59,9 @@ module.exports = {
                     'REJECTED': '❌'
                 };
                 const emoji = statusEmojis[claim.status] || '❓';
-                const userName = claim.username || 'Unknown User';
-                description += `${emoji} **#${claim.id}** - ${userName} - ${claim.status} - ${new Date(claim.created_at).toLocaleDateString('id-ID')}\n`;
-                description += `> ${claim.description.substring(0, 50)}${claim.description.length > 50 ? '...' : ''}\n\n`;
+                description += `${emoji} **#${claim.id}** - User ID: ${claim.user_id} - ${claim.status} - ${new Date(claim.created_at).toLocaleDateString('id-ID')}\n`;
+                description += `> ${claim.description.substring(0, 50)}${claim.description.length > 50 ? '...' : ''}\n`;
+                description += `**Hadiah:** ${claim.reward_amount || 'Menunggu konfirmasi'} | **E-Wallet:** ${claim.wallet_number || 'Belum diisi'}\n\n`;
             });
 
             const claimsEmbed = new EmbedBuilder()
