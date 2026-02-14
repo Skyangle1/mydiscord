@@ -72,8 +72,8 @@ module.exports = {
 
             // Create the embed with friend-finding description
             const embed = new EmbedBuilder()
-                .setTitle('👥 Folk Companion')
-                .setDescription('Jelajahi komunitas dan temukan teman sejiwa! Klik tombol di bawah untuk mengisi formulir dan mulai petualangan persahabatanmu.')
+                .setTitle('<:pinkcrown:1464766248054161621> FOLK COMPANION')
+                .setDescription('<:pinkcrown:1464766248054161621>FOLK COMPANION\nThis desk is dedicated for Crownfolk seeking friendship and meaningful companionship within the Kingdom.\n\nPlease use this service for the following purposes:\na. Finding new friends\nb. Social connection and support\nc. Reducing loneliness within the realm\nAll introductions are community-based and not guaranteed.\nKindly be respectful, sincere, and mindful of others boundaries.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment or inappropriate behavior will result in action.\n📜 Managed by the Royal Moderation Council.')
                 .setColor('#007bff')
                 .setTimestamp();
 

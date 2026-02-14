@@ -72,8 +72,8 @@ module.exports = {
 
             // Create the embed with matchmaking description
             const embed = new EmbedBuilder()
-                .setTitle('💘 Jodoh Myralune')
-                .setDescription('Klik tombol di bawah untuk mengisi biodatamu dan temukan seseorang yang satu frekuensi!')
+                .setTitle('<:pinkcrown:1464766248054161621> FOLK COURTSHIP')
+                .setDescription('<:pinkcrown:1464766248054161621>FOLK COURTSHIP\nThis desk is dedicated for Crownfolk seeking deeper romantic connections and long-term companionship.\n\nPlease use this service for the following purposes:\na. Seeking potential partners\nb. Expressing romantic intentions respectfully\nc. Building sincere courtship connections\nThis service does not guarantee matchmaking outcomes.\nKindly approach courtship with honesty, respect, and emotional maturity.\n\n🕰️ Operating Hours: Always Available\n🚫 Manipulative behavior or exploitation is strictly prohibited.\n📜 Managed by the Royal Moderation Council.')
                 .setColor('#811331')
                 .setTimestamp();
 

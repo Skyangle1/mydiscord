@@ -40,7 +40,7 @@ function initializeDatabase() {
             logo_url TEXT
         )
     `;
-    
+
     // Create family_members table
     const createFamilyMembersTableSQL = `
         CREATE TABLE IF NOT EXISTS family_members (
@@ -56,10 +56,10 @@ function initializeDatabase() {
         db.run(createLettersTableSQL);
         db.run(createFamiliesTableSQL);
         db.run(createFamilyMembersTableSQL);
-        
+
         // Run schema migrations
         runMigrations();
-        
+
         console.log('Database initialized successfully');
     });
 }
@@ -74,6 +74,8 @@ function runMigrations() {
         }
 
         const logoUrlExists = columns.some(col => col.name === 'logo_url');
+        const roleIdExists = columns.some(col => col.name === 'role_id');
+        const memberRoleIdExists = columns.some(col => col.name === 'member_role_id');
 
         if (!logoUrlExists) {
             // Add logo_url column
@@ -82,6 +84,28 @@ function runMigrations() {
                     console.error('Error adding logo_url column:', err);
                 } else {
                     console.log('Added logo_url column to families table');
+                }
+            });
+        }
+
+        if (!roleIdExists) {
+            // Add role_id column
+            db.run("ALTER TABLE families ADD COLUMN role_id TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding role_id column:', err);
+                } else {
+                    console.log('Added role_id column to families table');
+                }
+            });
+        }
+
+        if (!memberRoleIdExists) {
+            // Add member_role_id column
+            db.run("ALTER TABLE families ADD COLUMN member_role_id TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding member_role_id column:', err);
+                } else {
+                    console.log('Added member_role_id column to families table');
                 }
             });
         }
@@ -111,7 +135,7 @@ function runMigrations() {
             console.log('Claims table ensured');
         }
     });
-    
+
     // Check if wallet_number column exists in claims table
     db.all("PRAGMA table_info(claims)", [], (err, columns) => {
         if (err) {
@@ -124,6 +148,7 @@ function runMigrations() {
         const rewardAmountExists = columns.some(col => col.name === 'reward_amount');
         const channelIdExists = columns.some(col => col.name === 'channel_id');
         const threadIdExists = columns.some(col => col.name === 'thread_id');
+        const uniqueCodeExists = columns.some(col => col.name === 'unique_code');
 
         if (!walletNumberExists) {
             // Add wallet_number column
@@ -135,7 +160,7 @@ function runMigrations() {
                 }
             });
         }
-        
+
         if (!addressExists) {
             // Add address column
             db.run("ALTER TABLE claims ADD COLUMN address TEXT", (err) => {
@@ -146,7 +171,7 @@ function runMigrations() {
                 }
             });
         }
-        
+
         if (!rewardAmountExists) {
             // Add reward_amount column
             db.run("ALTER TABLE claims ADD COLUMN reward_amount TEXT", (err) => {
@@ -157,7 +182,7 @@ function runMigrations() {
                 }
             });
         }
-        
+
         if (!channelIdExists) {
             // Add channel_id column
             db.run("ALTER TABLE claims ADD COLUMN channel_id TEXT", (err) => {
@@ -168,7 +193,7 @@ function runMigrations() {
                 }
             });
         }
-        
+
         if (!threadIdExists) {
             // Add thread_id column
             db.run("ALTER TABLE claims ADD COLUMN thread_id TEXT", (err) => {
@@ -176,6 +201,17 @@ function runMigrations() {
                     console.error('Error adding thread_id column:', err);
                 } else {
                     console.log('Added thread_id column to claims table');
+                }
+            });
+        }
+
+        if (!uniqueCodeExists) {
+            // Add unique_code column
+            db.run("ALTER TABLE claims ADD COLUMN unique_code TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding unique_code column:', err);
+                } else {
+                    console.log('Added unique_code column to claims table');
                 }
             });
         }
@@ -219,6 +255,29 @@ function runMigrations() {
             console.error('Error creating auto_panels table:', err);
         } else {
             console.log('Auto panels table ensured');
+        }
+    });
+
+    // Create reflections table if it doesn't exist
+    const createReflectionsTableSQL = `
+        CREATE TABLE IF NOT EXISTS reflections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            topic TEXT,
+            content TEXT,
+            status TEXT DEFAULT 'OPEN',
+            unique_code TEXT,
+            thread_id TEXT,
+            history_message_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+
+    db.run(createReflectionsTableSQL, (err) => {
+        if (err) {
+            console.error('Error creating reflections table:', err);
+        } else {
+            console.log('Reflections table ensured');
         }
     });
 }

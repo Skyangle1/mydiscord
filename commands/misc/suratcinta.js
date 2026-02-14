@@ -45,8 +45,8 @@ module.exports = {
 
             // Create the embed with romantic description for Maestro bot
             const embed = new EmbedBuilder()
-                .setTitle('💌 Velvet Confessions')
-                .setDescription('Maestro menyambut Anda di 💌｜velvet-confession, tempat aman untuk berbagi perasaan tulus. Tulis surat cinta Anda dan kirimkan dengan penuh kasih sayang.')
+                .setTitle('<:pinkcrown:1464766248054161621> VELVET CONFESSION')
+                .setDescription('<:pinkcrown:1464766248054161621>VELVET CONFESSION\nThis desk is dedicated for Crownfolk who wish to express feelings, admiration, or affection.\n\nPlease use this service for the following purposes:\na. Sending confessions openly or anonymously\nb. Expressing appreciation or heartfelt messages\nc. Emotional expression within safe boundaries\nAll submissions are delivered as written, without moderation of feelings.\nKindly write respectfully and avoid coercive or inappropriate content.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment, pressure, or explicit content is prohibited.\n📜 Managed by the Royal Moderation Council.')
                 .setColor('#FF69B4')
                 .setTimestamp();
 

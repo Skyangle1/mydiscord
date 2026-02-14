@@ -45,8 +45,8 @@ module.exports = {
 
             // Create the embed with bonded house description
             const embed = new EmbedBuilder()
-                .setTitle('🏠 Keluarga Mɣralune')
-                .setDescription('Platform resmi untuk mengelola keluarga di server Mɣralune.\n\nGunakan tombol-tombol di bawah untuk membangun, bergabung, atau melihat daftar keluarga.')
+                .setTitle('<:pinkcrown:1464766248054161621> BONDED HOUSE')
+                .setDescription('<:pinkcrown:1464766248054161621> BONDED HOUSE\nThis desk is dedicated for Crownfolk who wish to form or join virtual families and or households within the Kingdom.\n\nPlease use this service for the following purposes:\na. Establishing a new House\nb. Requesting to join an existing House\nc. Exploring registered Houses and Households\nEach House operates under Kingdom regulations and Crown Landlord authority.\nKindly ensure clarity of intent when building or joining a House.\n\n🕰️ Operating Hours: Always Available\n🚫 Misuse of house and household systems may result in removal.\n📜 Managed by the Royal Moderation Council.')
                 .setColor('#FF69B4')
                 .setFooter({ text: 'Keluarga adalah komunitas kecil dalam komunitas besar Mɣralune' })
                 .setTimestamp();
@@ -58,23 +58,37 @@ module.exports = {
                 .setCustomId('btn_build_family')
                 .setEmoji('🏗️');
 
-            const joinButton = new ButtonBuilder()
-                .setLabel('Masuk Keluarga')
-                .setStyle(ButtonStyle.Primary)
-                .setCustomId('btn_join_family')
-                .setEmoji('👥');
-
-            const listButton = new ButtonBuilder()
-                .setLabel('Daftar Keluarga')
-                .setStyle(ButtonStyle.Secondary)
-                .setCustomId('btn_list_families')
-                .setEmoji('📋');
-
             const row = new ActionRowBuilder()
-                .addComponents(buildButton, joinButton, listButton);
+                .addComponents(buildButton, listButton);
 
             // Send the bonded house panel to the target channel
-            await targetChannel.send({ embeds: [embed], components: [row] });
+            const newMessage = await targetChannel.send({ embeds: [embed], components: [row] });
+
+            // Save the new message ID to database
+            const { db } = require('../../database/db');
+            const saveMessageId = () => {
+                return new Promise((resolve, reject) => {
+                    const query = `
+                        INSERT OR REPLACE INTO auto_panels (panel_type, message_id, channel_id)
+                        VALUES (?, ?, ?)
+                    `;
+                    db.run(query, ['bonded_house_panel', newMessage.id, targetChannelId], (err) => {
+                        if (err) {
+                            if (err.message.includes('no such table')) {
+                                console.log('auto_panels table does not exist, message ID not saved');
+                            } else {
+                                console.error('Error saving message ID to database:', err);
+                            }
+                            // Resolve anyway to continue execution
+                            resolve();
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+            };
+
+            await saveMessageId();
 
             await interaction.editReply({
                 content: `Bonded house panel has been set up successfully in ${targetChannel.toString()}.`,

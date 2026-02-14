@@ -1,17 +1,21 @@
+const { updateBondedHousePanel } = require('../handlers/bondedHouseUtils');
+const { updateReflectionPanel } = require('../handlers/reflectionUtils');
 
 module.exports = async (client, message) => {
     try {
-        // Check if message is in the bonded house channel
+        // Bonded House Auto-Update
         const bondedChannelId = process.env.BONDED_CHANNEL_ID;
-        if (!bondedChannelId) {
-            // If no bonded channel is configured, skip
-            return;
+        if (bondedChannelId && message.channel.id === bondedChannelId && !message.author.bot) {
+            await updateBondedHousePanel(client);
         }
 
-        // Skip updating the bonded house panel to prevent disturbance
-        // The panel should only be placed once when the /bonded-house command is used
-        // This prevents the panel from moving every time someone sends a message
+        // Reflection Ticket Auto-Update
+        const reflectionChannelId = process.env.REFLECTION_LOG_CHANNEL_ID;
+        if (reflectionChannelId && message.channel.id === reflectionChannelId && !message.author.bot) {
+            await updateReflectionPanel(client);
+        }
+
     } catch (error) {
-        console.error('Error in messageCreate event for bonded house:', error);
+        console.error('Error in messageCreate event:', error);
     }
 };

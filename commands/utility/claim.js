@@ -45,10 +45,10 @@ module.exports = {
 
             // Create the embed with claim description
             const embed = new EmbedBuilder()
-                .setTitle('🎁 Sistem Klaim Hadiah')
-                .setDescription('Klik tombol di bawah untuk mengajukan klaim hadiahmu.\nGunakan `/checkclaim` untuk melihat status klaimmu.')
+                .setTitle('<:pinkcrown:1464766248054161621>  REWARD CENTER')
+                .setDescription('This desk is dedicated to rewards, acknowledgements, and Kingdom benefits for Crownfolk.\n\nPlease use this service for the following purposes:\na. Claimable perks or benefits\nc. Recognition for contributions and achievements\nRewards are granted based on eligibility, activity, or royal decisions.\nKindly follow instructions carefully when claiming any reward.\n\n🕰️ Operating Hours: 08:00 am – 12:00 am (WIB) (UTC +7)\n🚫 Abuse, duplication, or false claims will result in restrictions.')
                 .setColor('#FFD700')
-                .setFooter({ text: 'Sistem Klaim Hadiah', iconURL: interaction.client.user.displayAvatarURL() })
+                .setFooter({ text: '📜 Managed by the Royal Secretaries.', iconURL: interaction.client.user.displayAvatarURL() })
                 .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
