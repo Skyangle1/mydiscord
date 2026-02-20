@@ -21,6 +21,23 @@ module.exports = {
                 return await interaction.reply({ content: 'Application not found.', ephemeral: true });
             }
 
+            // Permission Check - Only applicant or admin can close
+            const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                    process.env.CLIENT_OWNER_ID :
+                    process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                : [];
+
+            const isAdmin = authorizedIds.includes(interaction.user.id);
+            const isApplicant = application.user_id === interaction.user.id;
+
+            if (!isAdmin && !isApplicant) {
+                return await interaction.reply({
+                    content: '❌ Hanya applicant atau admin yang bisa menutup aplikasi ini.',
+                    ephemeral: true
+                });
+            }
+
             // Update application status to CLOSED
             await new Promise((resolve, reject) => {
                 db.run('UPDATE hiring_applications SET status = ? WHERE id = ?', ['CLOSED', applicationId], (err) => {

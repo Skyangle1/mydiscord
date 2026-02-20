@@ -21,6 +21,36 @@ module.exports = {
                 return await interaction.reply({ content: 'Application not found.', ephemeral: true });
             }
 
+            // Permission Check - Only admin/staff can claim
+            const authorizedIds = process.env.CLIENT_OWNER_ID ?
+                Array.isArray(process.env.CLIENT_OWNER_ID) ?
+                    process.env.CLIENT_OWNER_ID :
+                    process.env.CLIENT_OWNER_ID.split(',').map(id => id.trim())
+                : [];
+
+            const isAdmin = authorizedIds.includes(interaction.user.id);
+
+            // Check if user has staff/admin role
+            let isStaff = false;
+            const member = await interaction.guild.members.fetch(interaction.user.id);
+            
+            const staffRoleIds = [];
+            if (process.env.HIRING_ADMIN_ROLE_ID) {
+                process.env.HIRING_ADMIN_ROLE_ID.split(',').forEach(id => staffRoleIds.push(id.trim()));
+            }
+            if (process.env.HIRING_STAFF_ROLE_ID) {
+                process.env.HIRING_STAFF_ROLE_ID.split(',').forEach(id => staffRoleIds.push(id.trim()));
+            }
+
+            isStaff = staffRoleIds.some(roleId => member.roles.cache.has(roleId));
+
+            if (!isAdmin && !isStaff) {
+                return await interaction.reply({
+                    content: '❌ Hanya admin atau staff yang bisa claim aplikasi ini.',
+                    ephemeral: true
+                });
+            }
+
             // Update application status to CLAIMED
             await new Promise((resolve, reject) => {
                 db.run('UPDATE hiring_applications SET status = ?, claimed_by = ? WHERE id = ?', ['CLAIMED', interaction.user.id, applicationId], (err) => {
