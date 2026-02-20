@@ -42,35 +42,43 @@ module.exports = {
                 return await interaction.editReply({ content: 'Channel hiring news tidak ditemukan.', flags: 64 });
             }
 
-            // 5. Create Private Thread (NOT Public Thread!)
+            // 5. Create Private Thread with Permission Overwrites
             let thread;
             try {
+                // Create thread first
                 thread = await hiringChannel.threads.create({
                     name: `📋 Application #${uniqueCode} - ${positionName}`,
-                    type: ChannelType.PrivateThread, // IMPORTANT: PrivateThread, not PublicThread!
-                    autoArchiveDuration: 60,
-                    invitable: false, // Staff cannot invite others
+                    type: ChannelType.PrivateThread,
+                    autoArchiveDuration: 1440, // 24 hours
+                    invitable: false,
                     reason: `New Hiring Application by ${interaction.user.tag}`
                 });
-                console.log(`Private thread created: ${thread.id} for user ${interaction.user.id}`);
+                
+                console.log(`[HIRING] Private thread created: ${thread.id} for user ${interaction.user.id}`);
+                
+                // IMPORTANT: Set permission overwrites to ensure privacy
+                await thread.permissionOverwrites.set([
+                    {
+                        id: interaction.guildId, // @everyone role (default guild)
+                        deny: ['ViewChannel'] // Everyone cannot see by default
+                    },
+                    {
+                        id: interaction.user.id, // Applicant
+                        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+                    }
+                ]);
+                
+                console.log(`[HIRING] Permission overwrites set for thread ${thread.id}`);
+                
             } catch (threadErr) {
-                console.error('Failed to create private thread:', threadErr);
+                console.error('[HIRING] Failed to create private thread:', threadErr);
                 return await interaction.editReply({ 
-                    content: '❌ Gagal membuat private thread. Pastikan Bot memiliki izin:\n- Create Private Threads\n- Manage Threads\n\nDi channel settings: Settings > Permissions > Advanced > Create Private Threads', 
+                    content: '❌ Gagal membuat private thread. Pastikan Bot memiliki izin:\n- Create Private Threads\n- Manage Threads\n- Manage Permissions\n\nDi channel settings: Settings > Permissions > Advanced > Create Private Threads', 
                     flags: 64 
                 });
             }
 
-            // 6. Access Control - Add User to Private Thread
-            try {
-                await thread.members.add(interaction.user.id);
-                console.log(`User ${interaction.user.id} added to thread ${thread.id}`);
-            } catch (e) {
-                console.error('Failed to add user to thread:', e);
-                // Continue anyway, user might be able to see thread via other means
-            }
-
-            // 6b. Add Admin/Staff roles to thread so they can see it
+            // 6. Add Staff Roles with Permission
             try {
                 const staffRoleIds = [];
                 if (process.env.HIRING_ADMIN_ROLE_ID) {
@@ -82,17 +90,33 @@ module.exports = {
                 
                 for (const roleId of staffRoleIds) {
                     try {
-                        await thread.members.add(roleId);
-                        console.log(`Staff role ${roleId} added to thread ${thread.id}`);
+                        // Add role to thread permissions
+                        await thread.permissionOverwrites.edit(roleId, {
+                            ViewChannel: true,
+                            SendMessages: true,
+                            ReadMessageHistory: true,
+                            ManageThreads: true,
+                            ManageMessages: true
+                        });
+                        console.log(`[HIRING] Staff role ${roleId} given access to thread ${thread.id}`);
                     } catch (e) {
-                        console.error(`Failed to add role ${roleId} to thread:`, e);
+                        console.error(`[HIRING] Failed to add role ${roleId} to thread:`, e.message);
                     }
                 }
             } catch (e) {
-                console.error('Failed to add staff roles to thread:', e);
+                console.error('[HIRING] Failed to add staff roles to thread:', e.message);
             }
 
-            // 7. Notify Staff (via ping in thread, not adding them)
+            // 7. Add User to Thread (in case they need explicit access)
+            try {
+                await thread.members.add(interaction.user.id);
+                console.log(`[HIRING] User ${interaction.user.id} added to thread ${thread.id}`);
+            } catch (e) {
+                console.error('[HIRING] Failed to add user to thread:', e.message);
+                // User should still be able to see thread via permission overwrites
+            }
+
+            // 8. Notify Staff via ping
             let pings = [];
             const addRoles = (envVar) => {
                 if (process.env[envVar]) {
