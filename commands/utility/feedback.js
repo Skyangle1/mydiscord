@@ -46,7 +46,7 @@ module.exports = {
 			// Create the embed with professional description
 			const embed = new EmbedBuilder()
 				.setTitle('<:pinkcrown:1464766248054161621> ROYAL FEEDBACK')
-				.setDescription('This desk is dedicated for Crownfolk to share feedback regarding their experience within the Kingdom.\n\nPlease use this service for the following purposes:\na. Service satisfaction feedback\nb. System or moderation evaluation\nc. Community experience review\nAll feedback is documented to support continuous improvement.\nKindly provide honest, respectful, and constructive feedback to help us improve effectively.\n\n🕰️ Operating Hours: 08:00 – 24:00 (WIB) (UTC +7)\n🚫 Abuse or manipulation of ratings will result in restrictions.\n📜 Reviewed by the Royal Staff.')
+				.setDescription('<:pinkcrown:1464766248054161621> ROYAL FEEDBACK\nThis desk is dedicated for Crownfolk to share feedback regarding their experience within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Service satisfaction feedback\n> b. System or moderation evaluation\n> c. Community experience review\nAll feedback is documented to support continuous improvement.\nKindly provide honest, respectful, and constructive feedback to help us improve effectively.\n\n> 🕰️ Operating Hours: 08:00 – 24:00 (WIB) (UTC +7)\n> 🚫 Abuse or manipulation of ratings will result in restrictions.\n> 📜 Reviewed by the Royal Staff.')
 				.setColor('#0099ff')
 				.setFooter({ text: 'Feedback Anda sangat berharga bagi perkembangan komunitas Mɣralune', iconURL: interaction.client.user.displayAvatarURL() })
 				.setTimestamp();

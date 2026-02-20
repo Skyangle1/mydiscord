@@ -2,8 +2,8 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('claim')
-        .setDescription('Setup panel klaim hadiah (Owner & Developer only)'),
+        .setName('hiring-news')
+        .setDescription('Setup hiring news dashboard message (Owner & Developer only)'),
     async execute(interaction) {
         // Check if user is developer or owner (using CLIENT_OWNER_ID environment variable)
         const authorizedIds = process.env.CLIENT_OWNER_ID ?
@@ -19,15 +19,15 @@ module.exports = {
             });
         }
 
-        await interaction.deferReply({ ephemeral: true }); // Defer reply to extend response time
+        await interaction.deferReply({ ephemeral: true });
 
         try {
             // Get the target channel from environment variable
-            const targetChannelId = process.env.CLAIM_LOG_CHANNEL_ID;
+            const targetChannelId = process.env.HIRING_NEWS_CHANNEL_ID;
 
             if (!targetChannelId) {
                 await interaction.editReply({
-                    content: 'Target channel untuk panel klaim belum dikonfigurasi. Silakan setel CLAIM_LOG_CHANNEL_ID di file .env.',
+                    content: 'Target channel untuk panel hiring news belum dikonfigurasi. Silakan setel HIRING_NEWS_CHANNEL_ID di file .env.',
                     ephemeral: true
                 });
                 return;
@@ -43,31 +43,31 @@ module.exports = {
                 return;
             }
 
-            // Create the embed with claim description
+            // Create the embed with hiring news description
             const embed = new EmbedBuilder()
-                .setTitle('<:pinkcrown:1464766248054161621>  REWARD CENTER')
-                .setDescription('<:pinkcrown:1464766248054161621> REWARD CENTER\nThis desk is dedicated to rewards, acknowledgements, and Kingdom benefits for Crownfolk.\n\nPlease use this service for the following purposes:\n> a. Claimable perks or benefits\n> c. Recognition for contributions and achievements\nRewards are granted based on eligibility, activity, or royal decisions.\nKindly follow instructions carefully when claiming any reward.\n\n> 🕰️ Operating Hours: 08:00 am – 12:00 am (WIB) (UTC +7)\n> 🚫 Abuse, duplication, or false claims will result in restrictions.\n> 📜 Managed by the Royal Secretaries.')
+                .setTitle('<:pinkcrown:1464766248054161621>  HIRING NEWS')
+                .setDescription('<:pinkcrown:1464766248054161621> HIRING NEWS\n\nThis desk is dedicated to official recruitment and role openings within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Volunteer and staff recruitment updates\n> b. Internal role expansion notices\nAll hiring information shared here is official and issued by the Kingdom.\nKindly review requirements carefully before applying or responding.\n\n> 🕰️ Operating Hours: 08:00 am – 10:00 pm (WIB) (UTC +7)\n> 🚫 Unofficial offers or impersonation are strictly prohibited.\n> 📜 Managed by the Royal Secretaries')
                 .setColor('#FFD700')
                 .setFooter({ text: '📜 Managed by the Royal Secretaries.', iconURL: interaction.client.user.displayAvatarURL() })
                 .setTimestamp();
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId('btn_open_claim')
-                    .setLabel('Ajukan Klaim')
+                    .setCustomId('btn_open_hiring_news')
+                    .setLabel('Apply Position')
                     .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🎁')
+                    .setEmoji('📝')
             );
 
-            // Send the claim panel to the target channel
+            // Send the hiring news panel to the target channel
             await targetChannel.send({ embeds: [embed], components: [row] });
             await interaction.editReply({
-                content: `Panel Klaim berhasil dikirim ke ${targetChannel.toString()}! Formulir klaim siap digunakan.`,
+                content: `Panel Hiring News berhasil dikirim ke ${targetChannel.toString()}! Formulir aplikasi siap digunakan.`,
                 ephemeral: true
             });
         } catch (error) {
-            console.error('Error in claim command:', error);
-            await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur panel klaim.', ephemeral: true });
+            console.error('Error in hiring-news command:', error);
+            await interaction.editReply({ content: 'Terjadi kesalahan saat mengatur panel hiring news.', ephemeral: true });
         }
     },
 };

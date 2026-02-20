@@ -280,6 +280,32 @@ function runMigrations() {
             console.log('Reflections table ensured');
         }
     });
+
+    // Create hiring_applications table if it doesn't exist
+    const createHiringApplicationsTableSQL = `
+        CREATE TABLE IF NOT EXISTS hiring_applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            position_name TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            availability TEXT,
+            experience TEXT,
+            status TEXT DEFAULT 'PENDING',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            thread_id TEXT,
+            channel_id TEXT,
+            unique_code TEXT
+        )
+    `;
+
+    db.run(createHiringApplicationsTableSQL, (err) => {
+        if (err) {
+            console.error('Error creating hiring_applications table:', err);
+        } else {
+            console.log('Hiring applications table ensured');
+        }
+    });
 }
 
 module.exports = {

@@ -21,15 +21,16 @@ async function updateReflectionPanel(client) {
         const embed = new EmbedBuilder()
             .setTitle('<:pinkcrown:1464766248054161621> REFLECTION TICKET')
             .setDescription(
+                '<:pinkcrown:1464766248054161621> REFLECTION TICKET\n\n' +
                 'This desk is dedicated to private reflection sessions and personal support requests.\n\n' +
                 'Please use this service for the following purposes:\n' +
-                'a. Requesting private reflection sessions\n' +
-                'b. Emotional or mental support inquiries\n' +
-                'c. One-on-one guidance with appointed counselors\n' +
+                '> a. Requesting private reflection sessions\n' +
+                '> b. Emotional or mental support inquiries\n' +
+                '> c. One-on-one guidance with appointed counselors\n' +
                 'All tickets are handled discreetly and with respect to personal boundaries.\n' +
                 'Kindly share only what you are comfortable disclosing.\n\n' +
-                '🕰️ Operating Hours: By Appointment\n' +
-                '🚫 Misuse or false requests may lead to access limitations.'
+                '> 🕰️ Operating Hours: By Appointment\n' +
+                '> 🚫 Misuse or false requests may lead to access limitations.'
             )
             .setColor('#FF99CC')
             .setFooter({ text: '📜 Managed by the Royal Counsel.', iconURL: client.user.displayAvatarURL() })

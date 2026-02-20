@@ -314,6 +314,33 @@ module.exports = async (client, interaction) => {
                         console.error('Error executing reject family handler:', error);
                     }
                 }
+                else if (interaction.customId === 'btn_open_hiring_news') {
+                    try {
+                        const handler = require('../interactions/buttons/openHiringNews');
+                        await handler.execute(interaction);
+                        handlerFound = true;
+                    } catch (error) {
+                        console.error('Error executing open hiring news handler:', error);
+                    }
+                }
+                else if (interaction.customId.startsWith('approve_hiring_')) {
+                    try {
+                        const handler = require('../interactions/buttons/approveHiring');
+                        await handler.execute(interaction);
+                        handlerFound = true;
+                    } catch (error) {
+                        console.error('Error executing approve hiring handler:', error);
+                    }
+                }
+                else if (interaction.customId.startsWith('reject_hiring_')) {
+                    try {
+                        const handler = require('../interactions/buttons/rejectHiring');
+                        await handler.execute(interaction);
+                        handlerFound = true;
+                    } catch (error) {
+                        console.error('Error executing reject hiring handler:', error);
+                    }
+                }
 
                 if (!handlerFound) {
                     try {

@@ -24,6 +24,7 @@ class StartupFunctions {
             await this.sendSocialSharingPanel();
             await this.sendReflectionPanel();
             await this.sendCurhatPanel();
+            await this.sendHiringNewsPanel();
             await this.sendFamilyDirectory();
             await this.sendFamilyDirectory();
 
@@ -140,7 +141,7 @@ class StartupFunctions {
             // Create the embed with claim description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> REWARD CENTER')
-                .setDescription('This desk is dedicated to rewards, acknowledgements, and Kingdom benefits for Crownfolk.\n\nPlease use this service for the following purposes:\na. Claimable perks or benefits\nc. Recognition for contributions and achievements\nRewards are granted based on eligibility, activity, or royal decisions.\nKindly follow instructions carefully when claiming any reward.\n\n🕰️ Operating Hours: 08:00 am – 12:00 am (WIB) (UTC +7)\n🚫 Abuse, duplication, or false claims will result in restrictions.\n📜 Managed by the Royal Secretaries.')
+                .setDescription('<:pinkcrown:1464766248054161621> REWARD CENTER\nThis desk is dedicated to rewards, acknowledgements, and Kingdom benefits for Crownfolk.\n\nPlease use this service for the following purposes:\n> a. Claimable perks or benefits\n> c. Recognition for contributions and achievements\nRewards are granted based on eligibility, activity, or royal decisions.\nKindly follow instructions carefully when claiming any reward.\n\n> 🕰️ Operating Hours: 08:00 am – 12:00 am (WIB) (UTC +7)\n> 🚫 Abuse, duplication, or false claims will result in restrictions.\n> 📜 Managed by the Royal Secretaries.')
                 .setColor('#FFD700')
                 .setFooter({ text: 'Sistem Klaim Hadiah', iconURL: this.client.user.displayAvatarURL() })
                 .setTimestamp();
@@ -267,7 +268,7 @@ class StartupFunctions {
             // Create the embed with bonded house description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> BONDED HOUSE')
-                .setDescription('<:pinkcrown:1464766248054161621> BONDED HOUSE\nThis desk is dedicated for Crownfolk who wish to form or join virtual families and or households within the Kingdom.\n\nPlease use this service for the following purposes:\na. Establishing a new House\nb. Requesting to join an existing House\nc. Exploring registered Houses and Households\nEach House operates under Kingdom regulations and Crown Landlord authority.\nKindly ensure clarity of intent when building or joining a House.\n\n🕰️ Operating Hours: Always Available\n🚫 Misuse of house and household systems may result in removal.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> BONDED HOUSE\n\nThis desk is dedicated for Crownfolk who wish to form or join virtual families and or households within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Establishing a new House\n> b. Requesting to join an existing House\n> c. Exploring registered Houses and Households\nEach House operates under Kingdom regulations and Crown Landlord authority.\nKindly ensure clarity of intent when building or joining a House.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Misuse of house and household systems may result in removal.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#FF69B4')
                 .setFooter({ text: 'Keluarga adalah komunitas kecil dalam komunitas besar Mɣralune' })
                 .setTimestamp();
@@ -402,7 +403,7 @@ class StartupFunctions {
             // Create the embed with romantic description for Maestro bot
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> VELVET CONFESSION')
-                .setDescription('<:pinkcrown:1464766248054161621>VELVET CONFESSION\nThis desk is dedicated for Crownfolk who wish to express feelings, admiration, or affection.\n\nPlease use this service for the following purposes:\na. Sending confessions openly or anonymously\nb. Expressing appreciation or heartfelt messages\nc. Emotional expression within safe boundaries\nAll submissions are delivered as written, without moderation of feelings.\nKindly write respectfully and avoid coercive or inappropriate content.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment, pressure, or explicit content is prohibited.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621>  VELVET CONFESSION\n\nThis desk is dedicated for Crownfolk who wish to express feelings, admiration, or affection.\n\nPlease use this service for the following purposes:\n> a. Sending confessions openly or anonymously\n> b. Expressing appreciation or heartfelt messages\n> c. Emotional expression within safe boundaries\nAll submissions are delivered as written, without moderation of feelings.\nKindly write respectfully and avoid coercive or inappropriate content.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Harassment, pressure, or explicit content is prohibited.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#FF69B4')
                 .setTimestamp();
 
@@ -507,7 +508,7 @@ class StartupFunctions {
             // Create the embed with matchmaking description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> FOLK COURTSHIP')
-                .setDescription('<:pinkcrown:1464766248054161621>FOLK COURTSHIP\nThis desk is dedicated for Crownfolk seeking deeper romantic connections and long-term companionship.\n\nPlease use this service for the following purposes:\na. Seeking potential partners\nb. Expressing romantic intentions respectfully\nc. Building sincere courtship connections\nThis service does not guarantee matchmaking outcomes.\nKindly approach courtship with honesty, respect, and emotional maturity.\n\n🕰️ Operating Hours: Always Available\n🚫 Manipulative behavior or exploitation is strictly prohibited.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> FOLK COURTSHIP\n\nThis desk is dedicated for Crownfolk seeking deeper romantic connections and long-term companionship.\n\nPlease use this service for the following purposes:\n> a. Seeking potential partners\n> b. Expressing romantic intentions respectfully\n> c. Building sincere courtship connections\nThis service does not guarantee matchmaking outcomes.\nKindly approach courtship with honesty, respect, and emotional maturity.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Manipulative behavior or exploitation is strictly prohibited.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#811331')
                 .setTimestamp();
 
@@ -573,7 +574,7 @@ class StartupFunctions {
             // Create the embed with friend-finding description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> FOLK COMPANION')
-                .setDescription('<:pinkcrown:1464766248054161621>FOLK COMPANION\nThis desk is dedicated for Crownfolk seeking friendship and meaningful companionship within the Kingdom.\n\nPlease use this service for the following purposes:\na. Finding new friends\nb. Social connection and support\nc. Reducing loneliness within the realm\nAll introductions are community-based and not guaranteed.\nKindly be respectful, sincere, and mindful of others boundaries.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment or inappropriate behavior will result in action.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> FOLK COMPANION\n\nThis desk is dedicated for Crownfolk seeking friendship and meaningful companionship within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Finding new friends\n> b. Social connection and support\n> c. Reducing loneliness within the realm\nAll introductions are community-based and not guaranteed.\nKindly be respectful, sincere, and mindful of others boundaries.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Harassment or inappropriate behavior will result in action.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#007bff')
                 .setTimestamp();
 
@@ -639,7 +640,7 @@ class StartupFunctions {
             // Create the embed with feedback description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> ROYAL FEEDBACK')
-                .setDescription('This desk is dedicated for Crownfolk to share feedback regarding their experience within the Kingdom.\n\nPlease use this service for the following purposes:\na. Service satisfaction feedback\nb. System or moderation evaluation\nc. Community experience review\nAll feedback is documented to support continuous improvement.\nKindly provide honest, respectful, and constructive feedback to help us improve effectively.\n\n🕰️ Operating Hours: 08:00 – 24:00 (WIB) (UTC +7)\n🚫 Abuse or manipulation of ratings will result in restrictions.\n📜 Reviewed by the Royal Staff.')
+                .setDescription('<:pinkcrown:1464766248054161621> ROYAL FEEDBACK\nThis desk is dedicated for Crownfolk to share feedback regarding their experience within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Service satisfaction feedback\n> b. System or moderation evaluation\n> c. Community experience review\nAll feedback is documented to support continuous improvement.\nKindly provide honest, respectful, and constructive feedback to help us improve effectively.\n\n> 🕰️ Operating Hours: 08:00 – 24:00 (WIB) (UTC +7)\n> 🚫 Abuse or manipulation of ratings will result in restrictions.\n> 📜 Reviewed by the Royal Staff.')
                 .setColor('#0099ff')
                 .setFooter({ text: 'Feedback Anda sangat berharga bagi perkembangan komunitas Mɣralune', iconURL: this.client.user.displayAvatarURL() })
                 .setTimestamp();
@@ -705,7 +706,7 @@ class StartupFunctions {
             // Create the embed with professional description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> ROYAL SUGGESTIONS')
-                .setDescription('This desk is dedicated for Crownfolk to submit ideas, proposals, and improvements for the Kingdom.\n\nPlease use this service for the following purposes:\na. Feature or system suggestions\nb. Community improvement ideas\nEach submission will be recorded and reviewed by the Royal Moderation Council.\nKindly write your suggestion clearly, starting with a concise subject, followed by detailed explanation.\n\n🕰️ Operating Hours: 24 hours\n🚫 Spam may be ignored.\n📜 Reviewed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> ROYAL SUGGESTIONS\nThis desk is dedicated for Crownfolk to submit ideas, proposals, and improvements for the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Feature or system suggestions\n> b. Community improvement ideas\nEach submission will be recorded and reviewed by the Royal Moderation Council.\nKindly write your suggestion clearly, starting with a concise subject, followed by detailed explanation.\n\n> 🕰️ Operating Hours: 24 hours\n> 🚫 Spam may be ignored.\n> 📜 Reviewed by the Royal Moderation Council.')
                 .setColor('#811331')
                 .setFooter({ text: 'Saran Anda sangat berharga bagi perkembangan komunitas Mɣralune', iconURL: this.client.user.displayAvatarURL() })
                 .setTimestamp();
@@ -771,7 +772,7 @@ class StartupFunctions {
             // Create the embed with social sharing description
             const embed = new EmbedBuilder()
                 .setTitle('🔗 Bagikan Profil Sosial Media')
-                .setDescription('<:pinkcrown:1464766248054161621> FOLK NETWORK\nThis desk is dedicated for Crownfolk to share social media profiles and connect beyond the realm.\n\nPlease use this service for the following purposes:\na. Share Instagram or TikTok profiles\nb. Build social connections with other Crownfolk\nc. Encourage healthy real-life networking\nParticipation is voluntary and based on mutual respect.\nKindly share only accounts you own and are comfortable making public.\n\n🕰️ Operating Hours: Always Available\n🚫 Fake accounts, spam links, or forced promotion are prohibited.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> FOLK NETWORK\nThis desk is dedicated for Crownfolk to share social media profiles and connect beyond the realm.\n\nPlease use this service for the following purposes:\n> a. Share Instagram or TikTok profiles\n> b. Build social connections with other Crownfolk\n> c. Encourage healthy real-life networking\nParticipation is voluntary and based on mutual respect.\nKindly share only accounts you own and are comfortable making public.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Fake accounts, spam links, or forced promotion are prohibited.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#90EE90')
                 .setFooter({ text: 'Social Sharing System', iconURL: this.client.user.displayAvatarURL() })
                 .setTimestamp();
@@ -855,15 +856,16 @@ class StartupFunctions {
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> REFLECTION TICKET')
                 .setDescription(
+                    '<:pinkcrown:1464766248054161621> REFLECTION TICKET\n\n' +
                     'This desk is dedicated to private reflection sessions and personal support requests.\n\n' +
                     'Please use this service for the following purposes:\n' +
-                    'a. Requesting private reflection sessions\n' +
-                    'b. Emotional or mental support inquiries\n' +
-                    'c. One-on-one guidance with appointed counselors\n' +
+                    '> a. Requesting private reflection sessions\n' +
+                    '> b. Emotional or mental support inquiries\n' +
+                    '> c. One-on-one guidance with appointed counselors\n' +
                     'All tickets are handled discreetly and with respect to personal boundaries.\n' +
                     'Kindly share only what you are comfortable disclosing.\n\n' +
-                    '🕰️ Operating Hours: By Appointment\n' +
-                    '🚫 Misuse or false requests may lead to access limitations.'
+                    '> 🕰️ Operating Hours: By Appointment\n' +
+                    '> 🚫 Misuse or false requests may lead to access limitations.'
                 )
                 .setColor('#FF99CC')
                 .setFooter({ text: '📜 Managed by the Royal Counsel.', iconURL: this.client.user.displayAvatarURL() })
@@ -1008,6 +1010,98 @@ class StartupFunctions {
 
         } catch (error) {
             console.error('Error sending curhat panel:', error);
+        }
+    }
+
+    async sendHiringNewsPanel() {
+        try {
+            const hiringNewsChannelId = process.env.HIRING_NEWS_CHANNEL_ID;
+            if (!hiringNewsChannelId) {
+                console.log('HIRING_NEWS_CHANNEL_ID not configured, skipping hiring news panel.');
+                return;
+            }
+
+            const hiringNewsChannel = this.client.channels.cache.get(hiringNewsChannelId);
+            if (!hiringNewsChannel) {
+                console.error(`Hiring news channel (ID: ${hiringNewsChannelId}) could not be found.`);
+                return;
+            }
+
+            const { db } = require('./database/db');
+
+            const getSavedMessageId = () => {
+                return new Promise((resolve, reject) => {
+                    const query = `SELECT message_id FROM auto_panels WHERE panel_type = ?`;
+                    db.get(query, ['hiring_news_panel'], (err, row) => {
+                        if (err) {
+                            if (err.message.includes('no such table')) {
+                                resolve(null);
+                            } else {
+                                reject(err);
+                            }
+                        } else {
+                            resolve(row ? row.message_id : null);
+                        }
+                    });
+                });
+            };
+
+            let savedMessageId = await getSavedMessageId();
+
+            const embed = new EmbedBuilder()
+                .setTitle('<:pinkcrown:1464766248054161621>  HIRING NEWS')
+                .setDescription('<:pinkcrown:1464766248054161621> HIRING NEWS\n\nThis desk is dedicated to official recruitment and role openings within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Volunteer and staff recruitment updates\n> b. Internal role expansion notices\nAll hiring information shared here is official and issued by the Kingdom.\nKindly review requirements carefully before applying or responding.\n\n> 🕰️ Operating Hours: 08:00 am – 10:00 pm (WIB) (UTC +7)\n> 🚫 Unofficial offers or impersonation are strictly prohibited.\n> 📜 Managed by the Royal Secretaries')
+                .setColor('#FFD700')
+                .setFooter({ text: '📜 Managed by the Royal Secretaries.', iconURL: this.client.user.displayAvatarURL() })
+                .setTimestamp();
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('btn_open_hiring_news')
+                    .setLabel('Apply Position')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📝')
+            );
+
+            if (savedMessageId) {
+                try {
+                    const existingMessage = await hiringNewsChannel.messages.fetch(savedMessageId);
+                    await existingMessage.edit({ embeds: [embed], components: [row] });
+                    console.log(`Hiring news panel updated in channel ${hiringNewsChannelId}`);
+                } catch (editError) {
+                    console.log('Updating hiring news panel failed, sending new message...');
+                    const newMessage = await hiringNewsChannel.send({ embeds: [embed], components: [row] });
+
+                    const saveMessageId = () => {
+                        return new Promise((resolve, reject) => {
+                            const query = `INSERT OR REPLACE INTO auto_panels (panel_type, message_id, channel_id) VALUES (?, ?, ?)`;
+                            db.run(query, ['hiring_news_panel', newMessage.id, hiringNewsChannelId], (err) => {
+                                if (err) console.error('Error saving hiring news panel ID:', err);
+                                resolve();
+                            });
+                        });
+                    };
+                    await saveMessageId();
+                    console.log(`New hiring news panel sent and saved with ID ${newMessage.id}`);
+                }
+            } else {
+                const newMessage = await hiringNewsChannel.send({ embeds: [embed], components: [row] });
+
+                const saveMessageId = () => {
+                    return new Promise((resolve, reject) => {
+                        const query = `INSERT OR REPLACE INTO auto_panels (panel_type, message_id, channel_id) VALUES (?, ?, ?)`;
+                        db.run(query, ['hiring_news_panel', newMessage.id, hiringNewsChannelId], (err) => {
+                            if (err) console.error('Error saving hiring news panel ID:', err);
+                            resolve();
+                        });
+                    });
+                };
+                await saveMessageId();
+                console.log(`Hiring news panel sent and saved with ID ${newMessage.id}`);
+            }
+
+        } catch (error) {
+            console.error('Error sending hiring news panel:', error);
         }
     }
 

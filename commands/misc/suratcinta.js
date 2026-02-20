@@ -46,7 +46,7 @@ module.exports = {
             // Create the embed with romantic description for Maestro bot
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> VELVET CONFESSION')
-                .setDescription('<:pinkcrown:1464766248054161621>VELVET CONFESSION\nThis desk is dedicated for Crownfolk who wish to express feelings, admiration, or affection.\n\nPlease use this service for the following purposes:\na. Sending confessions openly or anonymously\nb. Expressing appreciation or heartfelt messages\nc. Emotional expression within safe boundaries\nAll submissions are delivered as written, without moderation of feelings.\nKindly write respectfully and avoid coercive or inappropriate content.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment, pressure, or explicit content is prohibited.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621>  VELVET CONFESSION\n\nThis desk is dedicated for Crownfolk who wish to express feelings, admiration, or affection.\n\nPlease use this service for the following purposes:\n> a. Sending confessions openly or anonymously\n> b. Expressing appreciation or heartfelt messages\n> c. Emotional expression within safe boundaries\nAll submissions are delivered as written, without moderation of feelings.\nKindly write respectfully and avoid coercive or inappropriate content.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Harassment, pressure, or explicit content is prohibited.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#FF69B4')
                 .setTimestamp();
 

@@ -46,7 +46,7 @@ module.exports = {
             // Create the embed with social sharing description
             const embed = new EmbedBuilder()
                 .setTitle('🔗 Bagikan Profil Sosial Media')
-                .setDescription('<:pinkcrown:1464766248054161621> FOLK NETWORK\nThis desk is dedicated for Crownfolk to share social media profiles and connect beyond the realm.\n\nPlease use this service for the following purposes:\na. Share Instagram or TikTok profiles\nb. Build social connections with other Crownfolk\nc. Encourage healthy real-life networking\nParticipation is voluntary and based on mutual respect.\nKindly share only accounts you own and are comfortable making public.\n\n🕰️ Operating Hours: Always Available\n🚫 Fake accounts, spam links, or forced promotion are prohibited.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> FOLK NETWORK\nThis desk is dedicated for Crownfolk to share social media profiles and connect beyond the realm.\n\nPlease use this service for the following purposes:\n> a. Share Instagram or TikTok profiles\n> b. Build social connections with other Crownfolk\n> c. Encourage healthy real-life networking\nParticipation is voluntary and based on mutual respect.\nKindly share only accounts you own and are comfortable making public.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Fake accounts, spam links, or forced promotion are prohibited.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#90EE90')
                 .setFooter({ text: 'Social Sharing System', iconURL: interaction.client.user.displayAvatarURL() })
                 .setTimestamp();

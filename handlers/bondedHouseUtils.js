@@ -20,7 +20,7 @@ async function updateBondedHousePanel(client) {
         // Define the panel content (Must match commands/utility/bonded-house.js)
         const embed = new EmbedBuilder()
             .setTitle('<:pinkcrown:1464766248054161621> BONDED HOUSE')
-            .setDescription('<:pinkcrown:1464766248054161621> BONDED HOUSE\nThis desk is dedicated for Crownfolk who wish to form or join virtual families and or households within the Kingdom.\n\nPlease use this service for the following purposes:\na. Establishing a new House\nb. Requesting to join an existing House\nc. Exploring registered Houses and Households\nEach House operates under Kingdom regulations and Crown Landlord authority.\nKindly ensure clarity of intent when building or joining a House.\n\n🕰️ Operating Hours: Always Available\n🚫 Misuse of house and household systems may result in removal.\n📜 Managed by the Royal Moderation Council.')
+            .setDescription('<:pinkcrown:1464766248054161621> BONDED HOUSE\n\nThis desk is dedicated for Crownfolk who wish to form or join virtual families and or households within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Establishing a new House\n> b. Requesting to join an existing House\n> c. Exploring registered Houses and Households\nEach House operates under Kingdom regulations and Crown Landlord authority.\nKindly ensure clarity of intent when building or joining a House.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Misuse of house and household systems may result in removal.\n> 📜 Managed by the Royal Moderation Council.')
             .setColor('#FF69B4')
             .setFooter({ text: 'Keluarga adalah komunitas kecil dalam komunitas besar Mɣralune' })
             .setTimestamp();

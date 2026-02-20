@@ -73,7 +73,7 @@ module.exports = {
             // Create the embed with friend-finding description
             const embed = new EmbedBuilder()
                 .setTitle('<:pinkcrown:1464766248054161621> FOLK COMPANION')
-                .setDescription('<:pinkcrown:1464766248054161621>FOLK COMPANION\nThis desk is dedicated for Crownfolk seeking friendship and meaningful companionship within the Kingdom.\n\nPlease use this service for the following purposes:\na. Finding new friends\nb. Social connection and support\nc. Reducing loneliness within the realm\nAll introductions are community-based and not guaranteed.\nKindly be respectful, sincere, and mindful of others boundaries.\n\n🕰️ Operating Hours: Always Available\n🚫 Harassment or inappropriate behavior will result in action.\n📜 Managed by the Royal Moderation Council.')
+                .setDescription('<:pinkcrown:1464766248054161621> FOLK COMPANION\n\nThis desk is dedicated for Crownfolk seeking friendship and meaningful companionship within the Kingdom.\n\nPlease use this service for the following purposes:\n> a. Finding new friends\n> b. Social connection and support\n> c. Reducing loneliness within the realm\nAll introductions are community-based and not guaranteed.\nKindly be respectful, sincere, and mindful of others boundaries.\n\n> 🕰️ Operating Hours: Always Available\n> 🚫 Harassment or inappropriate behavior will result in action.\n> 📜 Managed by the Royal Moderation Council.')
                 .setColor('#007bff')
                 .setTimestamp();
 
