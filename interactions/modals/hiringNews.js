@@ -42,29 +42,57 @@ module.exports = {
                 return await interaction.editReply({ content: 'Channel hiring news tidak ditemukan.', flags: 64 });
             }
 
-            // 5. Create Private Thread
+            // 5. Create Private Thread (NOT Public Thread!)
             let thread;
             try {
                 thread = await hiringChannel.threads.create({
                     name: `📋 Application #${uniqueCode} - ${positionName}`,
-                    type: ChannelType.PrivateThread,
+                    type: ChannelType.PrivateThread, // IMPORTANT: PrivateThread, not PublicThread!
                     autoArchiveDuration: 60,
-                    invitable: false,
+                    invitable: false, // Staff cannot invite others
                     reason: `New Hiring Application by ${interaction.user.tag}`
                 });
+                console.log(`Private thread created: ${thread.id} for user ${interaction.user.id}`);
             } catch (threadErr) {
                 console.error('Failed to create private thread:', threadErr);
-                return await interaction.editReply({ content: 'Gagal membuat private thread. Pastikan Bot memiliki izin "Create Private Threads" & "Manage Threads".', flags: 64 });
+                return await interaction.editReply({ 
+                    content: '❌ Gagal membuat private thread. Pastikan Bot memiliki izin:\n- Create Private Threads\n- Manage Threads\n\nDi channel settings: Settings > Permissions > Advanced > Create Private Threads', 
+                    flags: 64 
+                });
             }
 
-            // 6. Access Control - Add User
+            // 6. Access Control - Add User to Private Thread
             try {
                 await thread.members.add(interaction.user.id);
+                console.log(`User ${interaction.user.id} added to thread ${thread.id}`);
             } catch (e) {
                 console.error('Failed to add user to thread:', e);
+                // Continue anyway, user might be able to see thread via other means
             }
 
-            // 7. Notify Staff
+            // 6b. Add Admin/Staff roles to thread so they can see it
+            try {
+                const staffRoleIds = [];
+                if (process.env.HIRING_ADMIN_ROLE_ID) {
+                    process.env.HIRING_ADMIN_ROLE_ID.split(',').forEach(id => staffRoleIds.push(id.trim()));
+                }
+                if (process.env.HIRING_STAFF_ROLE_ID) {
+                    process.env.HIRING_STAFF_ROLE_ID.split(',').forEach(id => staffRoleIds.push(id.trim()));
+                }
+                
+                for (const roleId of staffRoleIds) {
+                    try {
+                        await thread.members.add(roleId);
+                        console.log(`Staff role ${roleId} added to thread ${thread.id}`);
+                    } catch (e) {
+                        console.error(`Failed to add role ${roleId} to thread:`, e);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to add staff roles to thread:', e);
+            }
+
+            // 7. Notify Staff (via ping in thread, not adding them)
             let pings = [];
             const addRoles = (envVar) => {
                 if (process.env[envVar]) {
