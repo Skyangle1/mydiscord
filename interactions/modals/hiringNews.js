@@ -6,22 +6,33 @@ module.exports = {
     customId: 'modal_hiring_news',
     async execute(interaction) {
         try {
-            await interaction.deferReply({ flags: 64 }); // Ephemeral defer
+            await interaction.deferReply({ flags: 64 });
 
-            // 1. Get Values
+            // 1. Get Inputs
             const positionName = interaction.fields.getTextInputValue('position_name');
             const reason = interaction.fields.getTextInputValue('reason');
             const availability = interaction.fields.getTextInputValue('availability');
             const experience = interaction.fields.getTextInputValue('experience') || 'Not provided';
 
-            // 2. Generate Unique Code
-            const uniqueCode = crypto.randomBytes(3).toString('hex').toUpperCase();
+            // 2. Config & Validation
+            const logChannelId = process.env.HIRING_NEWS_CHANNEL_ID;
 
-            // 3. Insert to Database
-            const applicationId = await new Promise((resolve, reject) => {
+            if (!logChannelId) {
+                return await interaction.editReply({ content: 'Configuration Error: HIRING_NEWS_CHANNEL_ID not set.', flags: 64 });
+            }
+
+            const logChannel = interaction.guild.channels.cache.get(logChannelId);
+            if (!logChannel) {
+                return await interaction.editReply({ content: 'Hiring Channel not found.', flags: 64 });
+            }
+
+            // 3. Generate Code & DB Insert
+            const uniqueCode = `HIR-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+
+            const dbId = await new Promise((resolve, reject) => {
                 db.run(
-                    `INSERT INTO hiring_applications (user_id, position_id, position_name, reason, availability, experience, status, unique_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [interaction.user.id, uniqueCode, positionName, reason, availability, experience, 'OPEN', uniqueCode],
+                    `INSERT INTO hiring_applications (user_id, position_id, position_name, reason, availability, experience, unique_code, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [interaction.user.id, uniqueCode, positionName, reason, availability, experience, uniqueCode, 'OPEN'],
                     function (err) {
                         if (err) reject(err);
                         else resolve(this.lastID);
@@ -29,107 +40,90 @@ module.exports = {
                 );
             });
 
-            // 4. Get Channel
-            const hiringChannelId = process.env.HIRING_NEWS_CHANNEL_ID;
-            if (!hiringChannelId) {
-                console.error('HIRING_NEWS_CHANNEL_ID not set in .env');
-                return await interaction.editReply({ content: 'Konfigurasi server belum lengkap. Hubungi Admin.', flags: 64 });
-            }
-
-            const hiringChannel = interaction.guild.channels.cache.get(hiringChannelId);
-            if (!hiringChannel) {
-                console.error(`Hiring channel ${hiringChannelId} not found`);
-                return await interaction.editReply({ content: 'Channel hiring news tidak ditemukan.', flags: 64 });
-            }
-
-            // 5. Create Private Thread (Same as Reflection System)
+            // 4. Create Standalone Private Thread (SAME AS REFLECTION)
             let thread;
             try {
-                thread = await hiringChannel.threads.create({
-                    name: `📋 Application #${uniqueCode} - ${positionName}`,
+                thread = await logChannel.threads.create({
+                    name: `📋 ${uniqueCode} - ${positionName}`,
                     type: ChannelType.PrivateThread,
                     autoArchiveDuration: 1440, // 24 hours
                     invitable: false,
-                    reason: `New Hiring Application by ${interaction.user.tag}`
+                    reason: `Hiring Application by ${interaction.user.tag}`
                 });
-                console.log(`[HIRING] Private thread created: ${thread.id} for user ${interaction.user.id}`);
-            } catch (threadErr) {
-                console.error('[HIRING] Thread creation failed:', threadErr);
-                return await interaction.editReply({ 
-                    content: '❌ Failed to create private thread.', 
-                    flags: 64 
-                });
+            } catch (err) {
+                console.error('Thread creation failed:', err);
+                return await interaction.editReply({ content: 'Failed to create private thread.', flags: 64 });
             }
 
-            // 6. Access Control - Add User (Same as Reflection)
+            // 5. Access Control (SAME AS REFLECTION)
             try {
                 await thread.members.add(interaction.user.id);
-                console.log(`[HIRING] User ${interaction.user.id} added to thread ${thread.id}`);
             } catch (e) {
-                console.error('[HIRING] Failed to add user to thread:', e);
+                console.error('Failed to add user to thread:', e);
             }
 
-            // 7. Add Staff Roles (Same as Reflection)
+            // Pings (SAME AS REFLECTION)
             let pings = [];
-            const addRoles = (envVar) => {
-                if (process.env[envVar]) {
-                    process.env[envVar].split(',').forEach(id => {
-                        if (id.trim()) pings.push(`<@&${id.trim()}>`);
-                    });
-                }
-            };
-            addRoles('HIRING_ADMIN_ROLE_ID');
-            addRoles('HIRING_STAFF_ROLE_ID');
-
-            if (pings.length === 0) {
-                const staffRole = interaction.guild.roles.cache.find(r => r.name === 'Staff' || r.name === 'Admin');
-                if (staffRole) pings.push(`<@&${staffRole.id}>`);
+            const adminRoleId = process.env.HIRING_ADMIN_ROLE_ID;
+            const staffRoleId = process.env.HIRING_STAFF_ROLE_ID;
+            
+            if (adminRoleId) {
+                adminRoleId.split(',').forEach(id => {
+                    if (id.trim()) pings.push(`<@&${id.trim()}>`);
+                });
+            }
+            if (staffRoleId) {
+                staffRoleId.split(',').forEach(id => {
+                    if (id.trim()) pings.push(`<@&${id.trim()}>`);
+                });
             }
 
-            // 8. Send Initial Message to Thread
-            const initialEmbed = new EmbedBuilder()
-                .setTitle(`📋 Hiring Application #${uniqueCode}`)
+            // 6. Send Embed to THREAD (SAME AS REFLECTION)
+            const embed = new EmbedBuilder()
+                .setTitle(`<:pinkcrown:1464766248054161621> HIRING APPLICATION #${uniqueCode}`)
                 .setColor('#FFD700')
+                .setDescription(`**Position:** ${positionName}\n\n**Motivation:**\n${reason}`)
                 .addFields(
-                    { name: 'Position', value: positionName, inline: true },
-                    { name: 'Applicant', value: `<@${interaction.user.id}>`, inline: true },
-                    { name: 'Code', value: `\`${uniqueCode}\``, inline: true },
-                    { name: 'Availability', value: availability, inline: false },
-                    { name: 'Motivation', value: reason.substring(0, 1000) || 'N/A', inline: false },
-                    { name: 'Experience', value: experience.substring(0, 1000) || 'N/A', inline: false },
+                    { name: 'Availability', value: availability, inline: true },
+                    { name: 'Experience', value: experience.substring(0, 500) || 'N/A', inline: true },
+                    { name: 'User', value: `<@${interaction.user.id}>`, inline: true },
                     { name: 'Status', value: 'OPEN', inline: true },
-                    { name: 'Opened', value: new Date().toLocaleString('id-ID'), inline: true }
+                    { name: 'Created At', value: new Date().toLocaleString('id-ID'), inline: true }
                 )
+                .setFooter({ text: 'Private Application' })
                 .setTimestamp();
 
             const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`close_hiring_${applicationId}`).setLabel('Close').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId(`claim_hiring_${applicationId}`).setLabel('Claim').setStyle(ButtonStyle.Success)
+                new ButtonBuilder()
+                    .setCustomId(`claim_hiring_${dbId}`)
+                    .setLabel('Claim Application')
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('🙋'),
+                new ButtonBuilder()
+                    .setCustomId(`close_hiring_${dbId}`)
+                    .setLabel('Close Application')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🔒')
             );
 
-            const initialMessage = await thread.send({
-                content: `🚨 **NEW APPLICATION** ${pings.join(' ')}\n<@${interaction.user.id}> has applied for **${positionName}**.`,
-                embeds: [initialEmbed],
+            await thread.send({
+                content: `🚨 **NEW APPLICATION** ${pings.join(' ')}\n<@${interaction.user.id}> applied for **${positionName}**.`,
+                embeds: [embed],
                 components: [actionRow]
             });
 
-            // 9. Update DB with Thread ID and History Message ID
-            db.run(`UPDATE hiring_applications SET thread_id = ?, channel_id = ?, history_message_id = ? WHERE id = ?`, [thread.id, hiringChannel.id, initialMessage.id, applicationId]);
+            // 7. Update DB with thread_id (SAME AS REFLECTION)
+            db.run(`UPDATE hiring_applications SET thread_id = ? WHERE id = ?`, [thread.id, dbId]);
 
-            // 10. Reply to Interaction (Ephemeral)
+            // 8. Reply (SAME AS REFLECTION)
             await interaction.editReply({
-                content: `✅ **Application Submitted!**\nSilakan cek Private Thread baru: <#${thread.id}>\n(Hanya kamu & staff yang bisa lihat)`,
+                content: `✅ **Application Submitted!**\nPlease join your private thread here: <#${thread.id}>`,
                 flags: 64
             });
 
         } catch (error) {
-            console.error('Error in hiringNews modal:', error);
-            const msg = 'Terjadi kesalahan sistem. Hubungi administrator.';
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: msg, ephemeral: true });
-            } else {
-                await interaction.editReply({ content: msg, flags: 64 });
-            }
+            console.error('Error submitting hiring application:', error);
+            await interaction.editReply({ content: 'System Error.', flags: 64 });
         }
     }
 };
