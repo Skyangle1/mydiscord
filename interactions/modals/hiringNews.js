@@ -21,7 +21,7 @@ module.exports = {
             const applicationId = await new Promise((resolve, reject) => {
                 db.run(
                     `INSERT INTO hiring_applications (user_id, position_id, position_name, reason, availability, experience, status, unique_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [interaction.user.id, uniqueCode, positionName, reason, availability, experience, 'PENDING', uniqueCode],
+                    [interaction.user.id, uniqueCode, positionName, reason, availability, experience, 'OPEN', uniqueCode],
                     function (err) {
                         if (err) reject(err);
                         else resolve(this.lastID);
@@ -81,8 +81,8 @@ module.exports = {
                 if (staffRole) pings.push(`<@&${staffRole.id}>`);
             }
 
-            // 8. Send Content to Thread
-            const detailedEmbed = new EmbedBuilder()
+            // 8. Send Initial Message to Thread
+            const initialEmbed = new EmbedBuilder()
                 .setTitle(`📋 Hiring Application #${uniqueCode}`)
                 .setColor('#FFD700')
                 .addFields(
@@ -92,24 +92,24 @@ module.exports = {
                     { name: 'Availability', value: availability, inline: false },
                     { name: 'Motivation', value: reason.substring(0, 1000) || 'N/A', inline: false },
                     { name: 'Experience', value: experience.substring(0, 1000) || 'N/A', inline: false },
-                    { name: 'Status', value: 'PENDING', inline: true },
-                    { name: 'Applied At', value: new Date().toLocaleString('id-ID'), inline: true }
+                    { name: 'Status', value: 'OPEN', inline: true },
+                    { name: 'Opened', value: new Date().toLocaleString('id-ID'), inline: true }
                 )
                 .setTimestamp();
 
             const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`approve_hiring_${applicationId}`).setLabel('Approve').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`reject_hiring_${applicationId}`).setLabel('Reject').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId(`close_hiring_${applicationId}`).setLabel('Close').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`claim_hiring_${applicationId}`).setLabel('Claim').setStyle(ButtonStyle.Success)
             );
 
-            await thread.send({
+            const initialMessage = await thread.send({
                 content: `🚨 **NEW APPLICATION** ${pings.join(' ')}\n<@${interaction.user.id}> has applied for **${positionName}**.`,
-                embeds: [detailedEmbed],
+                embeds: [initialEmbed],
                 components: [actionRow]
             });
 
-            // 9. Update DB with Thread ID
-            db.run(`UPDATE hiring_applications SET thread_id = ?, channel_id = ? WHERE id = ?`, [thread.id, hiringChannel.id, applicationId]);
+            // 9. Update DB with Thread ID and History Message ID
+            db.run(`UPDATE hiring_applications SET thread_id = ?, channel_id = ?, history_message_id = ? WHERE id = ?`, [thread.id, hiringChannel.id, initialMessage.id, applicationId]);
 
             // 10. Reply to Interaction (Ephemeral)
             await interaction.editReply({

@@ -291,11 +291,12 @@ function runMigrations() {
             reason TEXT NOT NULL,
             availability TEXT,
             experience TEXT,
-            status TEXT DEFAULT 'PENDING',
+            status TEXT DEFAULT 'OPEN',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             thread_id TEXT,
             channel_id TEXT,
-            unique_code TEXT
+            unique_code TEXT,
+            history_message_id TEXT
         )
     `;
 
@@ -304,6 +305,26 @@ function runMigrations() {
             console.error('Error creating hiring_applications table:', err);
         } else {
             console.log('Hiring applications table ensured');
+        }
+    });
+
+    // Add history_message_id column if not exists
+    db.all("PRAGMA table_info(hiring_applications)", [], (err, columns) => {
+        if (err) {
+            console.error('Error getting column info for hiring_applications:', err);
+            return;
+        }
+
+        const historyMessageIdExists = columns.some(col => col.name === 'history_message_id');
+
+        if (!historyMessageIdExists) {
+            db.run("ALTER TABLE hiring_applications ADD COLUMN history_message_id TEXT", (err) => {
+                if (err) {
+                    console.error('Error adding history_message_id column:', err);
+                } else {
+                    console.log('Added history_message_id column to hiring_applications table');
+                }
+            });
         }
     });
 }

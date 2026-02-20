@@ -323,22 +323,22 @@ module.exports = async (client, interaction) => {
                         console.error('Error executing open hiring news handler:', error);
                     }
                 }
-                else if (interaction.customId.startsWith('approve_hiring_')) {
+                else if (interaction.customId.startsWith('close_hiring_')) {
                     try {
-                        const handler = require('../interactions/buttons/approveHiring');
+                        const handler = require('../interactions/buttons/closeHiring');
                         await handler.execute(interaction);
                         handlerFound = true;
                     } catch (error) {
-                        console.error('Error executing approve hiring handler:', error);
+                        console.error('Error executing close hiring handler:', error);
                     }
                 }
-                else if (interaction.customId.startsWith('reject_hiring_')) {
+                else if (interaction.customId.startsWith('claim_hiring_')) {
                     try {
-                        const handler = require('../interactions/buttons/rejectHiring');
+                        const handler = require('../interactions/buttons/claimHiring');
                         await handler.execute(interaction);
                         handlerFound = true;
                     } catch (error) {
-                        console.error('Error executing reject hiring handler:', error);
+                        console.error('Error executing claim hiring handler:', error);
                     }
                 }
 

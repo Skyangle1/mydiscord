@@ -1,5 +1,6 @@
 const { updateBondedHousePanel } = require('../handlers/bondedHouseUtils');
 const { updateReflectionPanel } = require('../handlers/reflectionUtils');
+const { updateHiringNewsPanel } = require('../handlers/hiringNewsUtils');
 
 module.exports = async (client, message) => {
     try {
@@ -13,6 +14,12 @@ module.exports = async (client, message) => {
         const reflectionChannelId = process.env.REFLECTION_LOG_CHANNEL_ID;
         if (reflectionChannelId && message.channel.id === reflectionChannelId && !message.author.bot) {
             await updateReflectionPanel(client);
+        }
+
+        // Hiring News Auto-Update
+        const hiringNewsChannelId = process.env.HIRING_NEWS_CHANNEL_ID;
+        if (hiringNewsChannelId && message.channel.id === hiringNewsChannelId && !message.author.bot) {
+            await updateHiringNewsPanel(client);
         }
 
     } catch (error) {
